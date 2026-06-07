@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Download, FileText, Clock, Loader2, CheckCircle } from "lucide-react";
-import Link from "next/link";
+import { Download, FileText, Clock, Loader2, CheckCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export default function StatusPage() {
@@ -14,7 +13,6 @@ export default function StatusPage() {
   const [queuePosition, setQueuePosition] = useState(3);
 
   useEffect(() => {
-    // Simulate progress
     const interval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 100) {
@@ -41,138 +39,117 @@ export default function StatusPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="border-b px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-6 w-6" />
-            <span className="font-semibold text-lg tracking-tight">PrepLessAI</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="sm">Back to Dashboard</Button>
-            </Link>
-          </div>
+    <main className="flex-1 px-6 py-12">
+      <div className="max-w-xl mx-auto space-y-8">
+        <div className="text-center space-y-2">
+          <h1 className="text-2xl font-bold tracking-tight">
+            {status === "complete" ? "Lesson Ready!" : "Building Your Lesson"}
+          </h1>
+          <p className="text-muted-foreground">
+            {status === "complete"
+              ? "Your materials are rendered and ready to download."
+              : `You are #${queuePosition} in the queue. Sit tight — this usually takes 3-5 minutes.`}
+          </p>
         </div>
-      </header>
 
-      <main className="flex-1 px-6 py-12">
-        <div className="max-w-xl mx-auto space-y-8">
-          <div className="text-center space-y-2">
-            <h1 className="text-2xl font-bold tracking-tight">
-              {status === "complete" ? "Lesson Ready!" : "Building Your Lesson"}
-            </h1>
-            <p className="text-muted-foreground">
-              {status === "complete"
-                ? "Your materials are rendered and ready to download."
-                : `You are #${queuePosition} in the queue. Sit tight — this usually takes 3-5 minutes.`}
-            </p>
-          </div>
-
-          <Card>
-            <CardContent className="pt-6 space-y-6">
-              {/* Progress Bar */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">{statusLabels[status].label}</span>
-                  <span className="text-muted-foreground">{Math.round(progress)}%</span>
-                </div>
-                <Progress value={progress} className="h-2" />
+        <Card>
+          <CardContent className="pt-6 space-y-6">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="font-medium">{statusLabels[status].label}</span>
+                <span className="text-muted-foreground">{Math.round(progress)}%</span>
               </div>
+              <Progress value={progress} className="h-2" />
+            </div>
 
-              {/* Step Indicators */}
-              <div className="grid grid-cols-5 gap-2">
-                {[
-                  { key: "extracting", icon: FileText, label: "Extract" },
-                  { key: "generating", icon: Loader2, label: "Generate" },
-                  { key: "auditing", icon: CheckCircle, label: "Audit" },
-                  { key: "rendering", icon: Clock, label: "Render" },
-                  { key: "complete", icon: Download, label: "Done" },
-                ].map((step) => {
-                  const isActive = status === step.key;
-                  const isDone = progress >= 100 || (
-                    step.key === "extracting" && progress > 30) ||
-                    (step.key === "generating" && progress > 60) ||
-                    (step.key === "auditing" && progress > 80) ||
-                    (step.key === "rendering" && progress > 90);
-                  return (
-                    <div key={step.key} className={`flex flex-col items-center gap-1 p-2 rounded-lg ${isActive ? "bg-muted" : ""}`}>
-                      <step.icon className={`h-5 w-5 ${isDone ? "text-green-500" : isActive ? "text-foreground" : "text-muted-foreground"}`} />
-                      <span className={`text-xs ${isDone || isActive ? "font-medium" : "text-muted-foreground"}`}>{step.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+            <div className="grid grid-cols-5 gap-2">
+              {[
+                { key: "extracting", icon: FileText, label: "Extract" },
+                { key: "generating", icon: Loader2, label: "Generate" },
+                { key: "auditing", icon: CheckCircle, label: "Audit" },
+                { key: "rendering", icon: Clock, label: "Render" },
+                { key: "complete", icon: Download, label: "Done" },
+              ].map((step) => {
+                const isActive = status === step.key;
+                const isDone = progress >= 100 || (
+                  step.key === "extracting" && progress > 30) ||
+                  (step.key === "generating" && progress > 60) ||
+                  (step.key === "auditing" && progress > 80) ||
+                  (step.key === "rendering" && progress > 90);
+                return (
+                  <div key={step.key} className={`flex flex-col items-center gap-1 p-2 rounded-lg ${isActive ? "bg-muted" : ""}`}>
+                    <step.icon className={`h-5 w-5 ${isDone ? "text-green-500" : isActive ? "text-foreground" : "text-muted-foreground"}`} />
+                    <span className={`text-xs ${isDone || isActive ? "font-medium" : "text-muted-foreground"}`}>{step.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Lesson Info Card */}
-          <Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Lesson Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Class</span>
+              <span className="font-medium">Business / Finance</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Source</span>
+              <span className="font-medium">Textbook Chapter 3</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Pages</span>
+              <span className="font-medium">47 — 52</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Period Length</span>
+              <span className="font-medium">50 minutes</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {status === "complete" && (
+          <Card className="border-green-200 bg-green-50/50">
             <CardHeader>
-              <CardTitle className="text-base">Lesson Details</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-green-700">
+                <CheckCircle className="h-5 w-5" />
+                Downloads Ready
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Class</span>
-                <span className="font-medium">Business / Finance</span>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <Button className="w-full justify-between" variant="outline">
+                  <span className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Lesson Slides (.pptx)
+                  </span>
+                  <Badge variant="secondary">12 slides</Badge>
+                </Button>
+                <Button className="w-full justify-between" variant="outline">
+                  <span className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Teacher Notes (.docx)
+                  </span>
+                  <Badge variant="secondary">3 pages</Badge>
+                </Button>
+                <Button className="w-full justify-between" variant="outline">
+                  <span className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Student Handout (.docx)
+                  </span>
+                  <Badge variant="secondary">1 page</Badge>
+                </Button>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Source</span>
-                <span className="font-medium">Textbook Chapter 3</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Pages</span>
-                <span className="font-medium">47 — 52</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Period Length</span>
-                <span className="font-medium">50 minutes</span>
-              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Files are available for 24 hours. An email has also been sent.
+              </p>
             </CardContent>
           </Card>
-
-          {/* Download Section */}
-          {status === "complete" && (
-            <Card className="border-green-200 bg-green-50/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-green-700">
-                  <CheckCircle className="h-5 w-5" />
-                  Downloads Ready
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-2">
-                  <Button className="w-full justify-between" variant="outline">
-                    <span className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Lesson Slides (.pptx)
-                    </span>
-                    <Badge variant="secondary">12 slides</Badge>
-                  </Button>
-                  <Button className="w-full justify-between" variant="outline">
-                    <span className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Teacher Notes (.docx)
-                    </span>
-                    <Badge variant="secondary">3 pages</Badge>
-                  </Button>
-                  <Button className="w-full justify-between" variant="outline">
-                    <span className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Student Handout (.docx)
-                    </span>
-                    <Badge variant="secondary">1 page</Badge>
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  Files are available for 24 hours. An email has also been sent.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </main>
-    </div>
+        )}
+      </div>
+    </main>
   );
 }
