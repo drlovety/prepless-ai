@@ -9,9 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Shield, BookOpen, AlertTriangle, FileText, Image, CheckCircle } from "lucide-react";
+import { Upload, Shield, BookOpen, AlertTriangle, FileText, Image, CheckCircle, LogOut, User } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase-browser";
+import { useRouter } from "next/navigation";
 
 const CTE_CLASSES = [
   "Business / Finance",
@@ -28,6 +30,59 @@ export default function Dashboard() {
   const [selectedClass, setSelectedClass] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [extractedText, setExtractedText] = useState("");
+  const [user, setUser] = useState<any>(null);
+  const [remainingCredits, setRemainingCredits] = useState(0);
+  const [accessCode, setAccessCode] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [codeSuccess, setCodeSuccess] = useState("");
+  const router = useRouter();
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) router.push("/");
+      setUser(data.user);
+      if (data.user) loadCredits(data.user.id);
+    });
+  }, []);
+
+  const loadCredits = async (userId: string) => {
+    const { data } = await supabase
+      .from("user_credits")
+      .select("remaining_credits")
+      .eq("user_id", userId)
+      .single();
+    setRemainingCredits(data?.remaining_credits ?? 0);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/");
+  };
+
+  const handleRedeemCode = async () => {
+    setCodeError("");
+    setCodeSuccess("");
+    if (!accessCode.trim()) { setCodeError("Enter a code"); return; }
+    if (!user) { setCodeError("Not logged in"); return; }
+
+    const res = await fetch("/api/redeem-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: accessCode.trim(), user_id: user.id }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data?.success) {
+      setCodeError(data?.error || "Invalid or expired code");
+      return;
+    }
+
+    setCodeSuccess(`Code redeemed! ${data.remaining_credits} credits available.`);
+    setRemainingCredits(data.remaining_credits);
+    setAccessCode("");
+  };
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -51,10 +106,16 @@ export default function Dashboard() {
             <span className="font-semibold text-lg tracking-tight">PrepLessAI</span>
           </div>
           <div className="flex items-center gap-4">
+            <Badge variant={remainingCredits > 0 ? "default" : "secondary"}>
+              {remainingCredits} credit{remainingCredits !== 1 ? "s" : ""}
+            </Badge>
             <Link href="/dashboard/settings">
               <Button variant="ghost" size="sm">Settings</Button>
             </Link>
-            <Button variant="outline" size="sm">Logout</Button>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-1" />
+              Logout
+            </Button>
           </div>
         </div>
       </header>
@@ -279,19 +340,41 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <Alert>
-                    <AlertDescription>
-                      You need an access code to generate lessons. Enter your code or contact your administrator.
-                    </AlertDescription>
-                  </Alert>
+                  {remainingCredits === 0 ? (
+                    <>
+                      <Alert>
+                        <AlertDescription>
+                          You need an access code to generate lessons. Enter your code or contact your administrator.
+                        </AlertDescription>
+                      </Alert>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="access-code">Access Code</Label>
-                    <Input id="access-code" placeholder="Enter your access code" />
-                  </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="access-code">Access Code</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="access-code"
+                            placeholder="Enter your access code"
+                            value={accessCode}
+                            onChange={(e) => setAccessCode(e.target.value)}
+                          />
+                          <Button onClick={handleRedeemCode} disabled={!accessCode.trim()}>
+                            Redeem
+                          </Button>
+                        </div>
+                        {codeError && <p className="text-sm text-red-500">{codeError}</p>}
+                        {codeSuccess && <p className="text-sm text-green-600">{codeSuccess}</p>}
+                      </div>
+                    </>
+                  ) : (
+                    <Alert>
+                      <AlertDescription>
+                        You have {remainingCredits} credit{remainingCredits !== 1 ? "s" : ""} remaining. Each lesson costs 1 credit.
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
-                  <Button className="w-full" size="lg" disabled={!uploadedFile || !selectedClass}>
-                    Generate Lesson ($3.00)
+                  <Button className="w-full" size="lg" disabled={!uploadedFile || !selectedClass || remainingCredits === 0}>
+                    {remainingCredits > 0 ? `Generate Lesson (1 credit)` : "Enter Access Code"}
                   </Button>
                 </CardContent>
               </Card>
