@@ -15,22 +15,22 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
 
   useEffect(() => {
+    const supabase = createClient(); // lazy creation inside effect
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) {
         router.push("/");
         return;
       }
       setUser(data.user);
-      loadCredits(data.user.id);
+      loadCredits(supabase, data.user.id);
       setLoading(false);
     });
   }, []);
 
-  const loadCredits = async (userId: string) => {
-    const { data } = await supabase
+  const loadCredits = async (supabaseClient: any, userId: string) => {
+    const { data } = await supabaseClient
       .from("user_credits")
       .select("remaining_credits")
       .eq("user_id", userId)
@@ -39,6 +39,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   };
 
   const handleLogout = async () => {
+    const supabase = createClient(); // lazy creation
     await supabase.auth.signOut();
     router.push("/");
   };

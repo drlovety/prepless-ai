@@ -35,18 +35,18 @@ export default function Dashboard() {
   const [codeError, setCodeError] = useState("");
   const [codeSuccess, setCodeSuccess] = useState("");
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
+    const supabase = createClient(); // lazy creation inside effect
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push("/"); return; }
       setUser(data.user);
-      if (data.user) loadCredits(data.user.id);
+      if (data.user) loadCredits(supabase, data.user.id);
     });
   }, []);
 
-  const loadCredits = async (userId: string) => {
-    const { data } = await supabase
+  const loadCredits = async (supabaseClient: any, userId: string) => {
+    const { data } = await supabaseClient
       .from("user_credits")
       .select("remaining_credits")
       .eq("user_id", userId)

@@ -5,9 +5,8 @@ import { BookOpen } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 
 export default function Home() {
-  const supabase = createClient();
-
   const handleLogin = async () => {
+    const supabase = createClient(); // only created on client click
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
