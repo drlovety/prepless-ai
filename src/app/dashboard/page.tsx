@@ -184,7 +184,7 @@ export default function Dashboard() {
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
                     <Label>Class / Subject</Label>
-                    <Select value={selectedClass} onValueChange={setSelectedClass}>
+                    <Select value={selectedClass} onValueChange={(val) => setSelectedClass(val ?? "")}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a class" />
                       </SelectTrigger>
