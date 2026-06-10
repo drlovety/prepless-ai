@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Shield, AlertTriangle, FileText, Image, CheckCircle } from "lucide-react";
+import { Upload, Shield, AlertTriangle, FileText, Image, CheckCircle, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
@@ -34,10 +34,29 @@ export default function Dashboard() {
   const [accessCode, setAccessCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [codeSuccess, setCodeSuccess] = useState("");
+
+  // ── Generation state ──
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState("");
+
+  // ── Config state ──
+  const [duration, setDuration] = useState("50");
+  const [rigor, setRigor] = useState("standard");
+  const [includeJournal, setIncludeJournal] = useState(true);
+  const [includeEssential, setIncludeEssential] = useState(true);
+  const [includePhotos, setIncludePhotos] = useState(false);
+  const [unit, setUnit] = useState("");
+  const [dayNumber, setDayNumber] = useState("1");
+  const [topic, setTopic] = useState("");
+  const [schoolName, setSchoolName] = useState("Cascade High School");
+  const [schoolMascot, setSchoolMascot] = useState("Bruins");
+  const [primaryColor, setPrimaryColor] = useState("#8B0000");
+  const [secondaryColor, setSecondaryColor] = useState("#FFD700");
+
   const router = useRouter();
 
   useEffect(() => {
-    const supabase = createClient(); // lazy creation inside effect
+    const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push("/"); return; }
       setUser(data.user);
@@ -79,11 +98,64 @@ export default function Dashboard() {
     if (file) {
       setUploadedFile(file);
       setTimeout(() => {
-        setExtractedText("Sole Proprietorship — one owner...\n\nPartnership — General and Limited...\n\nLLC — Limited Liability Company...");
+        setExtractedText(`Sole Proprietorship -- one owner, unlimited personal liability, easiest to start. No formal paperwork required. Full control over decisions. All profits belong to owner. Examples: local coffee stand, freelance photographer, lawn care business.
+
+Partnership -- two or more owners. General: equal responsibility, equal liability. Limited: one active partner, one silent investor. Profits split according to agreement. Easier to raise capital than sole proprietorship.
+
+LLC -- Limited Liability Company. Hybrid entity combining partnership flexibility with corporation liability protection. Members not personally liable for business debts. Pass-through taxation avoids double taxation. Requires Articles of Organization and Operating Agreement. Popular for small businesses.`);
         setShowPreview(true);
       }, 800);
     }
   };
+
+  const handleGenerate = async () => {
+    if (!user) return;
+    setGenError("");
+    setGenerating(true);
+
+    const config = {
+      class_name: selectedClass,
+      unit: unit || "Unit 3",
+      day_number: parseInt(dayNumber) || 1,
+      topic: topic || selectedClass,
+      duration_min: parseInt(duration),
+      rigor,
+      include_journal: includeJournal,
+      include_essential: includeEssential,
+      school_name: schoolName,
+      school_city: "Everett",
+      school_state: "WA",
+      school_mascot: schoolMascot,
+      primary_color: primaryColor,
+      secondary_color: secondaryColor,
+    };
+
+    const res = await fetch("/api/generate-lesson", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: user.id,
+        source_text: extractedText,
+        config,
+      }),
+    });
+
+    const data = await res.json();
+    setGenerating(false);
+
+    if (!res.ok || !data.success) {
+      setGenError(data.error || "Generation failed. Try again.");
+      return;
+    }
+
+    // Burn one credit locally (server already did it)
+    setRemainingCredits((prev) => Math.max(0, prev - 1));
+
+    // Redirect to lesson output page
+    router.push(`/dashboard/lesson/${data.lesson_id}`);
+  };
+
+  const canGenerate = uploadedFile && selectedClass && remainingCredits > 0 && !generating;
 
   return (
     <main className="flex-1 px-6 py-8">
@@ -93,11 +165,17 @@ export default function Dashboard() {
           <p className="text-muted-foreground">Upload your source material and configure your lesson.</p>
         </div>
 
+        {genError && (
+          <Alert variant="destructive">
+            <AlertDescription>{genError}</AlertDescription>
+          </Alert>
+        )}
+
         <Tabs defaultValue="upload" className="space-y-6">
           <TabsList>
             <TabsTrigger value="upload">1. Upload</TabsTrigger>
             <TabsTrigger value="configure">2. Configure</TabsTrigger>
-            <TabsTrigger value="review">3. Review &amp; Generate</TabsTrigger>
+            <TabsTrigger value="review">3. Review & Generate</TabsTrigger>
           </TabsList>
 
           <TabsContent value="upload" className="space-y-6">
@@ -148,6 +226,21 @@ export default function Dashboard() {
                     <Input id="end-page" placeholder="e.g. 52" value={endPage} onChange={(e) => setEndPage(e.target.value)} />
                   </div>
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="unit">Unit Name / Number (optional)</Label>
+                  <Input id="unit" placeholder="e.g. Unit 3: Business Structures" value={unit} onChange={(e) => setUnit(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="day-number">Day Number</Label>
+                    <Input id="day-number" placeholder="1" value={dayNumber} onChange={(e) => setDayNumber(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="topic">Topic (optional)</Label>
+                    <Input id="topic" placeholder="e.g. Types of Business Ownership" value={topic} onChange={(e) => setTopic(e.target.value)} />
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -190,7 +283,7 @@ export default function Dashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Period Length</Label>
-                    <Select defaultValue="50">
+                    <Select value={duration} onValueChange={(val) => setDuration(val ?? "50")}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="45">45 minutes</SelectItem>
@@ -202,7 +295,7 @@ export default function Dashboard() {
                   </div>
                   <div className="space-y-2">
                     <Label>Rigor Level</Label>
-                    <Select defaultValue="standard">
+                    <Select value={rigor} onValueChange={(val) => setRigor(val ?? "standard")}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="basic">Basic</SelectItem>
@@ -215,15 +308,15 @@ export default function Dashboard() {
 
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center gap-3">
-                    <input type="checkbox" id="journal" className="h-4 w-4" defaultChecked />
+                    <input type="checkbox" id="journal" className="h-4 w-4" checked={includeJournal} onChange={(e) => setIncludeJournal(e.target.checked)} />
                     <Label htmlFor="journal" className="text-sm font-normal">Include journal prompt / bell ringer</Label>
                   </div>
                   <div className="flex items-center gap-3">
-                    <input type="checkbox" id="essential" className="h-4 w-4" defaultChecked />
+                    <input type="checkbox" id="essential" className="h-4 w-4" checked={includeEssential} onChange={(e) => setIncludeEssential(e.target.checked)} />
                     <Label htmlFor="essential" className="text-sm font-normal">Include essential questions</Label>
                   </div>
                   <div className="flex items-center gap-3">
-                    <input type="checkbox" id="photos" className="h-4 w-4" />
+                    <input type="checkbox" id="photos" className="h-4 w-4" checked={includePhotos} onChange={(e) => setIncludePhotos(e.target.checked)} />
                     <Label htmlFor="photos" className="text-sm font-normal flex items-center gap-2">
                       Include AI-generated photos / illustrations
                       <Badge variant="outline" className="text-xs">+$1.00</Badge>
@@ -233,12 +326,45 @@ export default function Dashboard() {
                 </div>
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>School Branding</CardTitle>
+                <CardDescription>Customize with your school info.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="school-name">School Name</Label>
+                  <Input id="school-name" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="school-mascot">Mascot</Label>
+                  <Input id="school-mascot" value={schoolMascot} onChange={(e) => setSchoolMascot(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="primary-color">Primary Color</Label>
+                    <div className="flex gap-2">
+                      <input type="color" id="primary-color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="h-9 w-9 rounded border" />
+                      <Input value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="flex-1" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="secondary-color">Secondary Color</Label>
+                    <div className="flex gap-2">
+                      <input type="color" id="secondary-color" value={secondaryColor} onChange={(e) => setSecondaryColor(e.target.value)} className="h-9 w-9 rounded border" />
+                      <Input value={secondaryColor} onChange={(e) => setSecondaryColor(e.target.value)} className="flex-1" />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="review" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Review &amp; Generate</CardTitle>
+                <CardTitle>Review & Generate</CardTitle>
                 <CardDescription>Double-check before generating.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -257,7 +383,11 @@ export default function Dashboard() {
                   </div>
                   <div className="flex justify-between py-2 border-b">
                     <span className="text-muted-foreground">Period Length</span>
-                    <span className="font-medium">50 minutes</span>
+                    <span className="font-medium">{duration} minutes</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b">
+                    <span className="text-muted-foreground">Rigor</span>
+                    <span className="font-medium capitalize">{rigor}</span>
                   </div>
                   <div className="flex justify-between py-2">
                     <span className="text-muted-foreground">Cost</span>
@@ -274,12 +404,7 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       <Label htmlFor="access-code">Access Code</Label>
                       <div className="flex gap-2">
-                        <Input
-                          id="access-code"
-                          placeholder="Enter your access code"
-                          value={accessCode}
-                          onChange={(e) => setAccessCode(e.target.value)}
-                        />
+                        <Input id="access-code" placeholder="Enter your access code" value={accessCode} onChange={(e) => setAccessCode(e.target.value)} />
                         <Button onClick={handleRedeemCode} disabled={!accessCode.trim()}>Redeem</Button>
                       </div>
                       {codeError && <p className="text-sm text-red-500">{codeError}</p>}
@@ -292,8 +417,22 @@ export default function Dashboard() {
                   </Alert>
                 )}
 
-                <Button className="w-full" size="lg" disabled={!uploadedFile || !selectedClass || remainingCredits === 0}>
-                  {remainingCredits > 0 ? "Generate Lesson (1 credit)" : "Enter Access Code"}
+                <Button
+                  className="w-full"
+                  size="lg"
+                  disabled={!canGenerate}
+                  onClick={handleGenerate}
+                >
+                  {generating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : remainingCredits > 0 ? (
+                    "Generate Lesson (1 credit)"
+                  ) : (
+                    "Enter Access Code"
+                  )}
                 </Button>
               </CardContent>
             </Card>
