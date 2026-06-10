@@ -77,9 +77,9 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   if (loading) return null;
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+    <div className="h-screen flex flex-col overflow-hidden">
+      <header className="border-b px-6 py-4 shrink-0">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BookOpen className="h-6 w-6" />
             <span className="font-semibold text-lg tracking-tight">PrepLessAI</span>

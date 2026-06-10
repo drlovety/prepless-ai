@@ -1,8 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// ── Validation ──
+function validateLessonJson(json: any): string | null {
+  if (!json || typeof json !== "object") return "Response is not an object";
+
+  // Required top-level keys
+  const requiredKeys = ["metadata", "slides", "activities", "lesson_plan"];
+  for (const key of requiredKeys) {
+    if (!(key in json)) return `Missing top-level key: ${key}`;
+  }
+
+  // Metadata checks
+  const meta = json.metadata;
+  if (!meta || typeof meta !== "object") return "metadata is not an object";
+  const metaFields = ["class_name", "unit", "day_number", "topic", "class_duration_min", "school_info"];
+  for (const f of metaFields) {
+    if (!(f in meta)) return `metadata missing field: ${f}`;
+  }
+
+  // Slides checks
+  if (!Array.isArray(json.slides)) return "slides is not an array";
+  if (json.slides.length < 3) return `Only ${json.slides.length} slides (need at least 3)`;
+  for (const [i, slide] of json.slides.entries()) {
+    if (!slide.slide_number) return `slide[${i}] missing slide_number`;
+    if (!slide.slide_type) return `slide[${i}] missing slide_type`;
+    if (!slide.content) return `slide[${i}] missing content`;
+  }
+
+  // Activities checks
+  if (!Array.isArray(json.activities)) return "activities is not an array";
+  for (const [i, act] of json.activities.entries()) {
+    if (!act.activity_id) return `activity[${i}] missing activity_id`;
+    if (!act.activity_name) return `activity[${i}] missing activity_name`;
+    if (!act.activity_type) return `activity[${i}] missing activity_type`;
+  }
+
+  // Lesson plan checks
+  const plan = json.lesson_plan;
+  if (!plan || typeof plan !== "object") return "lesson_plan is not an object";
+  if (!plan.duration_breakdown) return "lesson_plan missing duration_breakdown";
+  if (!plan.learning_objectives) return "lesson_plan missing learning_objectives";
+
+  return null; // valid
+}
+
 // ── OpenRouter call ──
-async function callOpenRouter(sourceText: string, config: any) {
+async function callOpenRouter(sourceText: string, config: any, retryError?: string) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY not configured");
 
@@ -50,23 +94,26 @@ RULES:
 5. At least 3 slides with has_image=true and descriptive image_search_query.
 6. Extract content from source material. Do not invent generic content.`;
 
-  const userPrompt = `TEACHER INPUT:
-- Class: ${config.class_name}
-- Duration: ${config.duration_min} minutes
-- Unit: ${config.unit || "N/A"}
-- Day: ${config.day_number || 1}
-- Topic: ${config.topic || "From source material"}
-- Rigor: ${config.rigor || "standard"}
-- Include journal: ${config.include_journal}
-- Include essential questions: ${config.include_essential}
-- School: ${config.school_name || "Cascade High School"} in ${config.school_city || "Everett"}, ${config.school_state || "WA"}
-- Mascot: ${config.school_mascot || "Bruins"}
-- Colors: Primary ${config.primary_color || "#8B0000"}, Secondary ${config.secondary_color || "#FFD700"}
-
-SOURCE MATERIAL:
-${sourceText.slice(0, 8000)}
-
-Generate the LessonDay JSON now.`;
+  const userPromptParts = [
+    `TEACHER INPUT:`,
+    `- Class: ${config.class_name}`,
+    `- Duration: ${config.duration_min} minutes`,
+    `- Unit: ${config.unit || "N/A"}`,
+    `- Day: ${config.day_number || 1}`,
+    `- Topic: ${config.topic || "From source material"}`,
+    `- Rigor: ${config.rigor || "standard"}`,
+    `- Include journal: ${config.include_journal}`,
+    `- Include essential questions: ${config.include_essential}`,
+    `- School: ${config.school_name || "Cascade High School"} in ${config.school_city || "Everett"}, ${config.school_state || "WA"}`,
+    `- Mascot: ${config.school_mascot || "Bruins"}`,
+    `- Colors: Primary ${config.primary_color || "#8B0000"}, Secondary ${config.secondary_color || "#FFD700"}`,
+    "",
+    retryError ? `PREVIOUS ATTENTION ERROR — fix this: ${retryError}\n` : "",
+    `SOURCE MATERIAL:\n${sourceText.slice(0, 8000)}`,
+    "",
+    `Generate the LessonDay JSON now.`,
+  ];
+  const userPrompt = userPromptParts.join("\n");
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -155,18 +202,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to create lesson record" }, { status: 500 });
   }
 
-  // ── 3. Call LLM ──
+  // ── 3. Call LLM (with validation + retry) ──
   let lessonJson: any;
+  let validationError: string | null = null;
   try {
     lessonJson = await callOpenRouter(source_text, config);
+    validationError = validateLessonJson(lessonJson);
+
+    if (validationError) {
+      console.log(`[attempt 1] Validation failed: ${validationError}`);
+      // Retry once
+      lessonJson = await callOpenRouter(source_text, config, validationError);
+      validationError = validateLessonJson(lessonJson);
+    }
   } catch (err: any) {
     await supabase
       .from("lessons")
       .update({ status: "failed", updated_at: new Date().toISOString() })
       .eq("id", lessonRow.id);
-    // Refund
     await supabase.rpc("add_user_credits", { user_id_input: user_id, amount: 1 });
     return NextResponse.json({ error: `Generation failed: ${err.message}` }, { status: 500 });
+  }
+
+  // Final validation check
+  if (validationError) {
+    await supabase
+      .from("lessons")
+      .update({ status: "failed", updated_at: new Date().toISOString() })
+      .eq("id", lessonRow.id);
+    await supabase.rpc("add_user_credits", { user_id_input: user_id, amount: 1 });
+    return NextResponse.json({ error: `Validation failed after retry: ${validationError}` }, { status: 500 });
   }
 
   // ── 4. Save result ──
