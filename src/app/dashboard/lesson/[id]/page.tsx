@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Clock, BookOpen, Lightbulb, CheckCircle } from "lucide-react";
 import Link from "next/link";
+import DownloadPptxButton from "./download-button";
 
 export const revalidate = 0;
 
@@ -99,9 +100,12 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
             <h1 className="text-3xl font-bold tracking-tight">{metadata.topic || lesson.topic || "Untitled Lesson"}</h1>
             <Badge variant="secondary">{metadata.class_name || lesson.class_name}</Badge>
           </div>
-          <p className="text-muted-foreground">
-            {metadata.school_info?.name || "Your School"} · {metadata.class_duration_min || 50} minutes · {activities.length} activities
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-muted-foreground">
+              {metadata.school_info?.name || "Your School"} · {metadata.class_duration_min || 50} minutes · {activities.length} activities
+            </p>
+            <DownloadPptxButton lessonId={id} />
+          </div>
         </div>
 
         {/* ── Learning Objectives ── */}

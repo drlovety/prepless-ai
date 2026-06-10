@@ -52,6 +52,7 @@ export default function Dashboard() {
   const [schoolMascot, setSchoolMascot] = useState("Bruins");
   const [primaryColor, setPrimaryColor] = useState("#8B0000");
   const [secondaryColor, setSecondaryColor] = useState("#FFD700");
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const router = useRouter();
 
@@ -60,7 +61,10 @@ export default function Dashboard() {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push("/"); return; }
       setUser(data.user);
-      if (data.user) loadCredits(supabase, data.user.id);
+      if (data.user) {
+        loadCredits(supabase, data.user.id);
+        loadSettings(supabase, data.user.id);
+      }
     });
   }, []);
 
@@ -71,6 +75,25 @@ export default function Dashboard() {
       .eq("user_id", userId)
       .single();
     setRemainingCredits(data?.remaining_credits ?? 0);
+  };
+
+  const loadSettings = async (supabaseClient: any, userId: string) => {
+    const { data } = await supabaseClient
+      .from("user_settings")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+    if (data) {
+      setSchoolName(data.school_name || "Cascade High School");
+      setSchoolMascot(data.mascot || "Bruins");
+      setPrimaryColor(data.primary_color || "#8B0000");
+      setSecondaryColor(data.secondary_color || "#FFD700");
+      setDuration(data.default_duration || "50");
+      setRigor(data.default_rigor || "standard");
+      setIncludeJournal(!!data.include_journal);
+      setIncludeEssential(!!data.include_essential_questions);
+    }
+    setSettingsLoaded(true);
   };
 
   const handleRedeemCode = async () => {
