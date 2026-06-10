@@ -93,19 +93,26 @@ export default function Dashboard() {
     setAccessCode("");
   };
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setUploadedFile(file);
-      setTimeout(() => {
-        setExtractedText(`Sole Proprietorship -- one owner, unlimited personal liability, easiest to start. No formal paperwork required. Full control over decisions. All profits belong to owner. Examples: local coffee stand, freelance photographer, lawn care business.
+    if (!file) return;
 
-Partnership -- two or more owners. General: equal responsibility, equal liability. Limited: one active partner, one silent investor. Profits split according to agreement. Easier to raise capital than sole proprietorship.
+    setUploadedFile(file);
+    setShowPreview(false);
 
-LLC -- Limited Liability Company. Hybrid entity combining partnership flexibility with corporation liability protection. Members not personally liable for business debts. Pass-through taxation avoids double taxation. Requires Articles of Organization and Operating Agreement. Popular for small businesses.`);
-        setShowPreview(true);
-      }, 800);
+    const fd = new FormData();
+    fd.append("file", file);
+
+    const res = await fetch("/api/extract-text", { method: "POST", body: fd });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setGenError(data.error || "Failed to extract text from file");
+      return;
     }
+
+    setExtractedText(data.text);
+    setShowPreview(true);
   };
 
   const handleGenerate = async () => {
@@ -395,27 +402,12 @@ LLC -- Limited Liability Company. Hybrid entity combining partnership flexibilit
                   </div>
                 </div>
 
-                {remainingCredits === 0 ? (
-                  <>
-                    <Alert>
-                      <AlertDescription>You need an access code to generate lessons.</AlertDescription>
-                    </Alert>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="access-code">Access Code</Label>
-                      <div className="flex gap-2">
-                        <Input id="access-code" placeholder="Enter your access code" value={accessCode} onChange={(e) => setAccessCode(e.target.value)} />
-                        <Button onClick={handleRedeemCode} disabled={!accessCode.trim()}>Redeem</Button>
-                      </div>
-                      {codeError && <p className="text-sm text-red-500">{codeError}</p>}
-                      {codeSuccess && <p className="text-sm text-green-600">{codeSuccess}</p>}
-                    </div>
-                  </>
-                ) : (
-                  <Alert>
-                    <AlertDescription>You have {remainingCredits} credit{remainingCredits !== 1 ? "s" : ""} remaining. Each lesson costs 1 credit.</AlertDescription>
-                  </Alert>
-                )}
+                <Alert>
+                  <AlertDescription>
+                    You have {remainingCredits} credit{remainingCredits !== 1 ? "s" : ""} remaining.
+                    Each lesson costs 1 credit.
+                  </AlertDescription>
+                </Alert>
 
                 <Button
                   className="w-full"
@@ -431,7 +423,7 @@ LLC -- Limited Liability Company. Hybrid entity combining partnership flexibilit
                   ) : remainingCredits > 0 ? (
                     "Generate Lesson (1 credit)"
                   ) : (
-                    "Enter Access Code"
+                    "Enter Access Code Above"
                   )}
                 </Button>
               </CardContent>
