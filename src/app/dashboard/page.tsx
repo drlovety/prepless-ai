@@ -38,6 +38,7 @@ export default function Dashboard() {
   // ── Generation state ──
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState("");
+  const [scanWarning, setScanWarning] = useState("");
 
   // ── Config state ──
   const [duration, setDuration] = useState("50");
@@ -135,6 +136,11 @@ export default function Dashboard() {
     }
 
     setExtractedText(data.text);
+    setScanWarning(
+      data.isScanned
+        ? "Scanned/image PDF detected. Text extraction is limited. If the preview below looks empty or incomplete, please paste the source text directly into the preview box."
+        : ""
+    );
     setShowPreview(true);
   };
 
@@ -198,6 +204,13 @@ export default function Dashboard() {
         {genError && (
           <Alert variant="destructive">
             <AlertDescription>{genError}</AlertDescription>
+          </Alert>
+        )}
+
+        {scanWarning && (
+          <Alert variant="default" className="border-amber-500 bg-amber-50 text-amber-900">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <AlertDescription>{scanWarning}</AlertDescription>
           </Alert>
         )}
 

@@ -10,17 +10,19 @@ export async function POST(req: NextRequest) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
     const fileType = file.type;
     const fileName = file.name.toLowerCase();
 
     let extractedText = "";
-
+    let isScanned = false;
     // ── PDF ──
     if (fileType === "application/pdf" || fileName.endsWith(".pdf")) {
-      const pdfParse = require("pdf-parse");
-      const data = await pdfParse(buffer);
-      extractedText = data.text;
+      const { extractText } = await import("unpdf");
+      const result = await extractText(new Uint8Array(arrayBuffer), { mergePages: true });
+      extractedText = result.text;
+      if (extractedText.trim().length < 100) {
+        isScanned = true;
+      }
     }
     // ── Word DOCX ──
     else if (
@@ -28,12 +30,12 @@ export async function POST(req: NextRequest) {
       fileName.endsWith(".docx")
     ) {
       const mammoth = await import("mammoth");
-      const result = await mammoth.extractRawText({ buffer });
+      const result = await mammoth.extractRawText({ buffer: Buffer.from(arrayBuffer) });
       extractedText = result.value;
     }
     // ── Plain text ──
     else if (fileType === "text/plain" || fileName.endsWith(".txt")) {
-      extractedText = buffer.toString("utf-8");
+      extractedText = new TextDecoder().decode(arrayBuffer);
     }
     // ── Images (basic — just filename for now, OCR later) ──
     else if (fileType.startsWith("image/")) {
@@ -51,6 +53,7 @@ export async function POST(req: NextRequest) {
       text: extractedText.slice(0, 15000), // cap at 15K chars
       fileName: file.name,
       fileType,
+      isScanned: fileType === "application/pdf" || fileName.endsWith(".pdf") ? isScanned : undefined,
     });
   } catch (err: any) {
     return NextResponse.json(

@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
   const buffer = await pres.write({ outputType: "nodebuffer" }) as Buffer;
   const filename = `${metadata.topic || lesson.topic || "lesson"}.pptx`.replace(/[^a-zA-Z0-9\-_\.]/g, "_");
 
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",

@@ -5,42 +5,95 @@ import { createClient } from "@supabase/supabase-js";
 function validateLessonJson(json: any): string | null {
   if (!json || typeof json !== "object") return "Response is not an object";
 
-  // Required top-level keys
   const requiredKeys = ["metadata", "slides", "activities", "lesson_plan"];
   for (const key of requiredKeys) {
     if (!(key in json)) return `Missing top-level key: ${key}`;
   }
 
-  // Metadata checks
+  // ── Metadata ──
   const meta = json.metadata;
   if (!meta || typeof meta !== "object") return "metadata is not an object";
   const metaFields = ["class_name", "unit", "day_number", "topic", "class_duration_min", "school_info"];
   for (const f of metaFields) {
     if (!(f in meta)) return `metadata missing field: ${f}`;
   }
+  if (typeof meta.day_number !== "number") return "metadata.day_number must be a number";
+  if (typeof meta.class_duration_min !== "number") return "metadata.class_duration_min must be a number";
+  if (!meta.school_info || typeof meta.school_info !== "object") return "metadata.school_info must be an object";
+  if (typeof meta.school_info.name !== "string") return "metadata.school_info.name must be a string";
+  if (!meta.school_info.colors || typeof meta.school_info.colors !== "object") return "metadata.school_info.colors must be an object";
+  if (typeof meta.school_info.colors.primary !== "string") return "metadata.school_info.colors.primary must be a string";
+  if (typeof meta.school_info.colors.secondary !== "string") return "metadata.school_info.colors.secondary must be a string";
 
-  // Slides checks
+  // ── Slides ──
   if (!Array.isArray(json.slides)) return "slides is not an array";
   if (json.slides.length < 3) return `Only ${json.slides.length} slides (need at least 3)`;
+
+  const allowedSlideTypes = new Set([
+    "title", "hook", "learning_objective", "journal_prompt", "prior_review",
+    "definition_concept", "real_world_example", "comparison", "activity_intro",
+    "activity_recap", "practice", "exit_ticket", "next_day_preview",
+  ]);
+
+  const slideContentRequired: Record<string, string[]> = {
+    title: ["unit_title", "topic_title"],
+    hook: ["hook_question"],
+    learning_objective: ["objective_statement"],
+    journal_prompt: ["prompt_text"],
+    definition_concept: ["term", "definition"],
+    real_world_example: ["scenario_title", "scenario_description"],
+    comparison: ["concept_a", "concept_b"],
+    activity_intro: ["activity_name", "instructions"],
+    activity_recap: ["connection_to_concept"],
+    practice: ["problem_setup"],
+    exit_ticket: ["question_1", "question_2"],
+    next_day_preview: ["preview_text"],
+  };
+
   for (const [i, slide] of json.slides.entries()) {
-    if (!slide.slide_number) return `slide[${i}] missing slide_number`;
-    if (!slide.slide_type) return `slide[${i}] missing slide_type`;
-    if (!slide.content) return `slide[${i}] missing content`;
+    if (!slide || typeof slide !== "object") return `slide[${i}] is not an object`;
+    if (typeof slide.slide_number !== "number") return `slide[${i}] slide_number must be a number`;
+    if (typeof slide.slide_type !== "string") return `slide[${i}] slide_type must be a string`;
+    if (!allowedSlideTypes.has(slide.slide_type)) return `slide[${i}] has invalid slide_type: ${slide.slide_type}`;
+    if (!slide.content || typeof slide.content !== "object") return `slide[${i}] content is not an object`;
+
+    const required = slideContentRequired[slide.slide_type] || [];
+    for (const f of required) {
+      if (!(f in slide.content)) return `slide[${i}] (${slide.slide_type}) missing content field: ${f}`;
+    }
+
+    if (slide.has_image === true) {
+      if (typeof slide.image_search_query !== "string" || slide.image_search_query.trim().length === 0) {
+        return `slide[${i}] has_image=true but missing image_search_query`;
+      }
+    }
   }
 
-  // Activities checks
+  // ── Activities ──
   if (!Array.isArray(json.activities)) return "activities is not an array";
   for (const [i, act] of json.activities.entries()) {
-    if (!act.activity_id) return `activity[${i}] missing activity_id`;
-    if (!act.activity_name) return `activity[${i}] missing activity_name`;
-    if (!act.activity_type) return `activity[${i}] missing activity_type`;
+    if (!act || typeof act !== "object") return `activity[${i}] is not an object`;
+    if (typeof act.activity_id !== "string") return `activity[${i}] activity_id must be a string`;
+    if (typeof act.activity_name !== "string") return `activity[${i}] activity_name must be a string`;
+    if (typeof act.activity_type !== "string") return `activity[${i}] activity_type must be a string`;
+    if (typeof act.duration_min !== "number") return `activity[${i}] duration_min must be a number`;
+    if (typeof act.grouping !== "string") return `activity[${i}] grouping must be a string`;
+    if (!act.materials || !Array.isArray(act.materials)) return `activity[${i}] materials must be an array`;
+    if (!act.instructions_student_facing || typeof act.instructions_student_facing !== "string") {
+      return `activity[${i}] instructions_student_facing must be a string`;
+    }
+    if (!act.deliverables || !Array.isArray(act.deliverables)) return `activity[${i}] deliverables must be an array`;
   }
 
-  // Lesson plan checks
+  // ── Lesson plan ──
   const plan = json.lesson_plan;
   if (!plan || typeof plan !== "object") return "lesson_plan is not an object";
-  if (!plan.duration_breakdown) return "lesson_plan missing duration_breakdown";
-  if (!plan.learning_objectives) return "lesson_plan missing learning_objectives";
+  if (!plan.duration_breakdown || !Array.isArray(plan.duration_breakdown)) return "lesson_plan.duration_breakdown must be an array";
+  if (!plan.learning_objectives || !Array.isArray(plan.learning_objectives)) return "lesson_plan.learning_objectives must be an array";
+  if (!plan.instructional_phases || !Array.isArray(plan.instructional_phases)) return "lesson_plan.instructional_phases must be an array";
+  if (!plan.teacher_notes || typeof plan.teacher_notes !== "object") return "lesson_plan.teacher_notes must be an object";
+  if (!plan.answer_keys || typeof plan.answer_keys !== "object") return "lesson_plan.answer_keys must be an object";
+  if (!plan.differentiation || typeof plan.differentiation !== "object") return "lesson_plan.differentiation must be an object";
 
   return null; // valid
 }
