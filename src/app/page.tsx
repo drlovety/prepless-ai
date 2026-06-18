@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BookOpen, Mail, Loader2, CheckCircle } from "lucide-react";
+import { Mail, Loader2, CheckCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase-browser";
 import { useState } from "react";
 
@@ -43,9 +43,12 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4">
       <div className="max-w-md w-full space-y-8 text-center">
-        <div className="flex items-center justify-center gap-3">
-          <BookOpen className="h-10 w-10" />
-          <span className="font-bold text-3xl tracking-tight">PrepLessAI</span>
+        <div className="flex items-center justify-center">
+          <img
+            src="/prepless-logo.jpg"
+            alt="PrepLessAI"
+            className="h-24 w-auto"
+          />
         </div>
         <p className="text-muted-foreground text-lg">
           Generate classroom-ready CTE lesson plans in minutes. No prep, just teach.

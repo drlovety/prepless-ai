@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, LogOut, Settings, Plus, Ticket } from "lucide-react";
+import { LogOut, Settings, Plus, Ticket } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -80,9 +80,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     <div className="h-screen flex flex-col overflow-hidden">
       <header className="border-b px-6 py-4 shrink-0">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-6 w-6" />
-            <span className="font-semibold text-lg tracking-tight">PrepLessAI</span>
+          <div className="flex items-center">
+            <img
+              src="/prepless-logo.jpg"
+              alt="PrepLessAI"
+              className="h-8 w-auto"
+            />
           </div>
           <div className="flex items-center gap-3">
             {showCodeInput ? (
