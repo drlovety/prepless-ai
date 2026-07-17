@@ -229,13 +229,17 @@ async function runGeneration(
       .update({ status: "failed", updated_at: new Date().toISOString() })
       .eq("id", lessonId);
     await supabase.rpc("add_user_credits", { user_id_input: userId, amount: 1 });
-    await supabase.from("notifications").insert({
-      user_id: userId,
-      type: "error",
-      title: "Lesson generation failed",
-      message: `Your lesson "${config.topic || config.class_name}" could not be generated. Your credit has been refunded.`,
-      lesson_id: lessonId,
-    });
+    try {
+      await supabase.from("notifications").insert({
+        user_id: userId,
+        type: "error",
+        title: "Lesson generation failed",
+        message: `Your lesson "${config.topic || config.class_name}" could not be generated. Your credit has been refunded.`,
+        lesson_id: lessonId,
+      });
+    } catch (notifErr) {
+      console.error(`[background] Failed to insert error notification:`, notifErr);
+    }
     return;
   }
 
@@ -246,13 +250,17 @@ async function runGeneration(
       .update({ status: "failed", updated_at: new Date().toISOString() })
       .eq("id", lessonId);
     await supabase.rpc("add_user_credits", { user_id_input: userId, amount: 1 });
-    await supabase.from("notifications").insert({
-      user_id: userId,
-      type: "error",
-      title: "Lesson generation failed",
-      message: `Your lesson "${config.topic || config.class_name}" failed validation after retry. Your credit has been refunded.`,
-      lesson_id: lessonId,
-    });
+    try {
+      await supabase.from("notifications").insert({
+        user_id: userId,
+        type: "error",
+        title: "Lesson generation failed",
+        message: `Your lesson "${config.topic || config.class_name}" failed validation after retry. Your credit has been refunded.`,
+        lesson_id: lessonId,
+      });
+    } catch (notifErr) {
+      console.error(`[background] Failed to insert error notification:`, notifErr);
+    }
     return;
   }
 
@@ -266,13 +274,17 @@ async function runGeneration(
     })
     .eq("id", lessonId);
 
-  await supabase.from("notifications").insert({
-    user_id: userId,
-    type: "success",
-    title: "Lesson ready",
-    message: `Your lesson "${config.topic || config.class_name}" is ready to view.`,
-    lesson_id: lessonId,
-  });
+  try {
+    await supabase.from("notifications").insert({
+      user_id: userId,
+      type: "success",
+      title: "Lesson ready",
+      message: `Your lesson "${config.topic || config.class_name}" is ready to view.`,
+      lesson_id: lessonId,
+    });
+  } catch (notifErr) {
+    console.error(`[background] Failed to insert success notification:`, notifErr);
+  }
 }
 
 // ── API Route ──
