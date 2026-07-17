@@ -9,10 +9,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Shield, AlertTriangle, FileText, Image, CheckCircle, Loader2 } from "lucide-react";
+import { Upload, Shield, AlertTriangle, FileText, Image, CheckCircle, Loader2, Clock, ArrowRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const CTE_CLASSES = [
   "Business / Finance",
@@ -39,6 +47,8 @@ export default function Dashboard() {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState("");
   const [scanWarning, setScanWarning] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingNotice, setPendingNotice] = useState("");
 
   // ── Config state ──
   const [duration, setDuration] = useState("50");
@@ -146,6 +156,15 @@ export default function Dashboard() {
 
   const handleGenerate = async () => {
     if (!user) return;
+    if (generating) return; // already in flight
+    setGenError("");
+    setPendingNotice("");
+    setShowConfirm(true);
+  };
+
+  const handleConfirmGenerate = async () => {
+    setShowConfirm(false);
+    if (!user) return;
     setGenError("");
     setGenerating(true);
 
@@ -187,8 +206,10 @@ export default function Dashboard() {
     // Burn one credit locally (server already did it)
     setRemainingCredits((prev) => Math.max(0, prev - 1));
 
-    // Redirect to lesson output page
-    router.push(`/dashboard/lesson/${data.lesson_id}`);
+    // Show pending notice — user is notified when ready
+    setPendingNotice(
+      `Your lesson "${config.topic || config.class_name}" is being generated. You'll get a notification when it's ready.`
+    );
   };
 
   const canGenerate = uploadedFile && selectedClass && remainingCredits > 0 && !generating;
@@ -204,6 +225,15 @@ export default function Dashboard() {
         {genError && (
           <Alert variant="destructive">
             <AlertDescription>{genError}</AlertDescription>
+          </Alert>
+        )}
+
+        {pendingNotice && (
+          <Alert className="border-green-500 bg-green-50 text-green-900">
+            <CheckCircle className="h-4 w-4 text-green-500" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>{pendingNotice}</span>
+            </AlertDescription>
           </Alert>
         )}
 
@@ -466,6 +496,43 @@ export default function Dashboard() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Confirmation Dialog */}
+        <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Generate Lesson?</DialogTitle>
+              <DialogDescription>
+                This will use <strong>1 credit</strong> to generate a full lesson plan
+                with slides, activities, and teacher notes from your uploaded material.
+                <br /><br />
+                Class: <strong>{selectedClass || "—"}</strong>
+                <br />
+                Topic: <strong>{topic || selectedClass || "—"}</strong>
+                <br />
+                Duration: <strong>{duration} minutes</strong>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowConfirm(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmGenerate} disabled={generating}>
+                {generating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Confirm & Generate
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </main>
   );

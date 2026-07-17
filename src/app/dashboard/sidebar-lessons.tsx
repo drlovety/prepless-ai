@@ -47,6 +47,7 @@ export default function SidebarLessons() {
       case "complete": return <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />;
       case "failed": return <XCircle className="h-3 w-3 text-red-500 shrink-0" />;
       case "generating": return <Loader2 className="h-3 w-3 text-amber-500 animate-spin shrink-0" />;
+      case "pending": return <Loader2 className="h-3 w-3 text-blue-500 animate-spin shrink-0" />;
       default: return <Clock className="h-3 w-3 text-muted-foreground shrink-0" />;
     }
   };

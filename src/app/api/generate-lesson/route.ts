@@ -202,6 +202,79 @@ RULES:
   return parsed;
 }
 
+// ── Background generation ──
+async function runGeneration(
+  supabase: any,
+  lessonId: string,
+  userId: string,
+  sourceText: string,
+  config: any
+) {
+  let lessonJson: any;
+  let validationError: string | null = null;
+
+  try {
+    lessonJson = await callOpenRouter(sourceText, config);
+    validationError = validateLessonJson(lessonJson);
+
+    if (validationError) {
+      console.log(`[attempt 1] Validation failed: ${validationError}`);
+      lessonJson = await callOpenRouter(sourceText, config, validationError);
+      validationError = validateLessonJson(lessonJson);
+    }
+  } catch (err: any) {
+    console.error(`[background] Generation failed for lesson ${lessonId}:`, err.message);
+    await supabase
+      .from("lessons")
+      .update({ status: "failed", updated_at: new Date().toISOString() })
+      .eq("id", lessonId);
+    await supabase.rpc("add_user_credits", { user_id_input: userId, amount: 1 });
+    await supabase.from("notifications").insert({
+      user_id: userId,
+      type: "error",
+      title: "Lesson generation failed",
+      message: `Your lesson "${config.topic || config.class_name}" could not be generated. Your credit has been refunded.`,
+      lesson_id: lessonId,
+    });
+    return;
+  }
+
+  if (validationError) {
+    console.error(`[background] Validation failed after retry for lesson ${lessonId}: ${validationError}`);
+    await supabase
+      .from("lessons")
+      .update({ status: "failed", updated_at: new Date().toISOString() })
+      .eq("id", lessonId);
+    await supabase.rpc("add_user_credits", { user_id_input: userId, amount: 1 });
+    await supabase.from("notifications").insert({
+      user_id: userId,
+      type: "error",
+      title: "Lesson generation failed",
+      message: `Your lesson "${config.topic || config.class_name}" failed validation after retry. Your credit has been refunded.`,
+      lesson_id: lessonId,
+    });
+    return;
+  }
+
+  // Save success
+  await supabase
+    .from("lessons")
+    .update({
+      status: "complete",
+      generated_json: lessonJson,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", lessonId);
+
+  await supabase.from("notifications").insert({
+    user_id: userId,
+    type: "success",
+    title: "Lesson ready",
+    message: `Your lesson "${config.topic || config.class_name}" is ready to view.`,
+    lesson_id: lessonId,
+  });
+}
+
 // ── API Route ──
 export async function POST(req: NextRequest) {
   let body: any;
@@ -240,7 +313,7 @@ export async function POST(req: NextRequest) {
     .from("lessons")
     .insert({
       user_id,
-      status: "generating",
+      status: "pending",
       class_name: config.class_name,
       topic: config.topic || "",
       source_text: source_text.slice(0, 5000),
@@ -255,51 +328,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to create lesson record" }, { status: 500 });
   }
 
-  // ── 3. Call LLM (with validation + retry) ──
-  let lessonJson: any;
-  let validationError: string | null = null;
-  try {
-    lessonJson = await callOpenRouter(source_text, config);
-    validationError = validateLessonJson(lessonJson);
-
-    if (validationError) {
-      console.log(`[attempt 1] Validation failed: ${validationError}`);
-      // Retry once
-      lessonJson = await callOpenRouter(source_text, config, validationError);
-      validationError = validateLessonJson(lessonJson);
-    }
-  } catch (err: any) {
-    await supabase
-      .from("lessons")
-      .update({ status: "failed", updated_at: new Date().toISOString() })
-      .eq("id", lessonRow.id);
-    await supabase.rpc("add_user_credits", { user_id_input: user_id, amount: 1 });
-    return NextResponse.json({ error: `Generation failed: ${err.message}` }, { status: 500 });
-  }
-
-  // Final validation check
-  if (validationError) {
-    await supabase
-      .from("lessons")
-      .update({ status: "failed", updated_at: new Date().toISOString() })
-      .eq("id", lessonRow.id);
-    await supabase.rpc("add_user_credits", { user_id_input: user_id, amount: 1 });
-    return NextResponse.json({ error: `Validation failed after retry: ${validationError}` }, { status: 500 });
-  }
-
-  // ── 4. Save result ──
-  await supabase
-    .from("lessons")
-    .update({
-      status: "complete",
-      generated_json: lessonJson,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", lessonRow.id);
+  // ── 3. Return immediately ──
+  // Fire the LLM generation in the background (Node.js runtime keeps running after response)
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  runGeneration(supabase, lessonRow.id, user_id, source_text, config);
 
   return NextResponse.json({
     success: true,
     lesson_id: lessonRow.id,
-    lesson: lessonJson,
+    status: "pending",
+    message: "Your lesson is being generated. You'll be notified when it's ready.",
   });
 }
