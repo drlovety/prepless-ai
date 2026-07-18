@@ -15,9 +15,10 @@ interface Lesson {
 }
 
 interface CreditLedgerEntry {
-  type: "debit" | "credit";
+  id: string;
+  type: "debit" | "redemption" | "refund" | "purchase" | "adjustment";
   amount: number;
-  reason: string;
+  description: string;
   created_at: string;
 }
 
@@ -27,15 +28,25 @@ export default function SidebarLessons() {
   const [error, setError] = useState("");
   const [remainingCredits, setRemainingCredits] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<CreditLedgerEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const [sessionToken, setSessionToken] = useState("");
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) { setLoading(false); return; }
+      setSessionToken(session.access_token);
       fetchLessons(session.access_token);
       fetchCredits(supabase, session.access_token);
     });
   }, []);
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
 
   const fetchLessons = async (token: string) => {
     try {
@@ -60,6 +71,24 @@ export default function SidebarLessons() {
     if (res.ok) setRemainingCredits(data.remaining_credits ?? 0);
   };
 
+  const fetchHistory = async (token: string) => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch("/api/credit-history", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) setHistory(data.transactions ?? []);
+    } catch {}
+    setHistoryLoading(false);
+  };
+
+  const toggleHistory = async (token: string) => {
+    const next = !showHistory;
+    setShowHistory(next);
+    if (next && history.length === 0) fetchHistory(token);
+  };
+
   const statusIcon = (status: string) => {
     switch (status) {
       case "complete": return <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />;
@@ -69,19 +98,6 @@ export default function SidebarLessons() {
       default: return <Clock className="h-3 w-3 text-muted-foreground shrink-0" />;
     }
   };
-
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  };
-
-  // Build simple ledger from lessons (debits) + placeholder for redemptions (fetched separately)
-  const ledger: CreditLedgerEntry[] = lessons.map((l) => ({
-    type: "debit" as const,
-    amount: l.credits_used,
-    reason: l.topic || l.class_name || "Lesson",
-    created_at: l.created_at,
-  }));
 
   return (
     <div className="w-64 bg-muted/30 flex flex-col overflow-hidden border-r shrink-0">
@@ -125,7 +141,7 @@ export default function SidebarLessons() {
             <span className="text-sm font-medium">{remainingCredits} credit{remainingCredits !== 1 ? "s" : ""}</span>
           </div>
           <button
-            onClick={() => setShowHistory((prev) => !prev)}
+            onClick={() => toggleHistory(sessionToken)}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <History className="h-3 w-3" />
@@ -135,18 +151,27 @@ export default function SidebarLessons() {
 
         {showHistory && (
           <div className="space-y-1 max-h-48 overflow-y-auto border rounded-md p-2 bg-background">
-            {ledger.length === 0 && (
+            {historyLoading && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {!historyLoading && history.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-2">No history yet.</p>
             )}
-            {ledger.map((entry, i) => (
-              <div key={i} className="flex items-center justify-between text-xs">
-                <span className="truncate flex-1 mr-2 text-muted-foreground" title={entry.reason}>
-                  {entry.reason}
-                </span>
-                <span className="text-red-500 font-mono shrink-0">-{entry.amount}</span>
-              </div>
-            ))}
-            <p className="text-[10px] text-muted-foreground text-center pt-1 border-t">Redemptions not shown yet</p>
+            {!historyLoading && history.map((entry) => {
+              const isCredit = entry.type === "redemption" || entry.type === "refund" || entry.type === "purchase";
+              return (
+                <div key={entry.id} className="flex items-center justify-between text-xs">
+                  <span className="truncate flex-1 mr-2 text-muted-foreground" title={entry.description}>
+                    {formatDate(entry.created_at)} — {entry.description}
+                  </span>
+                  <span className={`font-mono shrink-0 ${isCredit ? "text-green-600" : "text-red-500"}`}>
+                    {isCredit ? "+" : "-"}{entry.amount}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

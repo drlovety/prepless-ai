@@ -52,6 +52,19 @@ export async function POST(req: NextRequest) {
     .eq("user_id", user_id)
     .single();
 
+  // 4. Log redemption transaction
+  try {
+    await supabase.from("credit_transactions").insert({
+      user_id: user_id,
+      type: "redemption",
+      amount: creditAmount,
+      balance_after: credits?.remaining_credits ?? creditAmount,
+      description: `Code redeemed: ${code.toUpperCase()}`,
+    });
+  } catch (txErr) {
+    console.error("[redeem-code] Failed to log redemption transaction:", txErr);
+  }
+
   return NextResponse.json({
     success: true,
     remaining_credits: credits?.remaining_credits ?? creditAmount,

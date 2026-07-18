@@ -154,7 +154,7 @@ function validateLessonJson(json: any, config?: any): string | null {
 }
 
 // ── OpenRouter call ──
-async function callOpenRouter(sourceText: string, config: any, retryError?: string) {
+async function callOpenRouter(sourceText: string, config: any, retryError?: string, signal?: AbortSignal) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY not configured");
 
@@ -233,6 +233,7 @@ ${buildRoadmap(config)}`;
       "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://prepless-ai.up.railway.app",
       "X-Title": "PrepLessAI",
     },
+    signal,
     body: JSON.stringify({
       model: "deepseek/deepseek-chat",
       messages: [
@@ -270,28 +271,58 @@ async function runGeneration(
   let lessonJson: any;
   let validationError: string | null = null;
 
+  // Helper to log credit transactions
+  const logTransaction = async (type: string, amount: number, description: string) => {
+    try {
+      const { data: creditData } = await supabase
+        .from("user_credits")
+        .select("remaining_credits")
+        .eq("user_id", userId)
+        .single();
+      await supabase.from("credit_transactions").insert({
+        user_id: userId,
+        type,
+        amount,
+        balance_after: creditData?.remaining_credits ?? 0,
+        description,
+        lesson_id: lessonId,
+      });
+    } catch (txErr) {
+      console.error(`[background] Failed to log ${type} transaction:`, txErr);
+    }
+  };
+
   try {
-    lessonJson = await callOpenRouter(sourceText, config);
+    // Attempt 1 — 5-minute timeout per attempt
+    const ctrl1 = new AbortController();
+    const t1 = setTimeout(() => ctrl1.abort(), 5 * 60 * 1000);
+    lessonJson = await callOpenRouter(sourceText, config, undefined, ctrl1.signal);
+    clearTimeout(t1);
     validationError = validateLessonJson(lessonJson, config);
 
     if (validationError) {
       console.log(`[attempt 1] Validation failed: ${validationError}`);
-      lessonJson = await callOpenRouter(sourceText, config, validationError);
+      const ctrl2 = new AbortController();
+      const t2 = setTimeout(() => ctrl2.abort(), 5 * 60 * 1000);
+      lessonJson = await callOpenRouter(sourceText, config, validationError, ctrl2.signal);
+      clearTimeout(t2);
       validationError = validateLessonJson(lessonJson, config);
     }
   } catch (err: any) {
-    console.error(`[background] Generation failed for lesson ${lessonId}:`, err.message);
+    const isTimeout = err.name === "AbortError" || err.message?.toLowerCase().includes("aborted");
+    console.error(`[background] Generation failed for lesson ${lessonId}${isTimeout ? " (timeout after 5 min)" : ""}:`, err.message || err);
     await supabase
       .from("lessons")
       .update({ status: "failed", updated_at: new Date().toISOString() })
       .eq("id", lessonId);
     await supabase.rpc("add_user_credits", { user_id_input: userId, amount: 1 });
+    await logTransaction("refund", 1, `Refunded — ${isTimeout ? "generation timed out" : "generation failed"}: ${config.topic || config.class_name}`);
     try {
       await supabase.from("notifications").insert({
         user_id: userId,
         type: "error",
         title: "Lesson generation failed",
-        message: `Your lesson "${config.topic || config.class_name}" could not be generated. Your credit has been refunded.`,
+        message: `Your lesson "${config.topic || config.class_name}" ${isTimeout ? "timed out after 5 minutes" : "could not be generated"}. Your credit has been refunded.`,
         lesson_id: lessonId,
       });
     } catch (notifErr) {
@@ -307,6 +338,7 @@ async function runGeneration(
       .update({ status: "failed", updated_at: new Date().toISOString() })
       .eq("id", lessonId);
     await supabase.rpc("add_user_credits", { user_id_input: userId, amount: 1 });
+    await logTransaction("refund", 1, `Refunded — validation failed: ${config.topic || config.class_name}`);
     try {
       await supabase.from("notifications").insert({
         user_id: userId,
@@ -377,6 +409,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Get current balance for transaction log
+  const { data: creditDataAfterBurn } = await supabase
+    .from("user_credits")
+    .select("remaining_credits")
+    .eq("user_id", user_id)
+    .single();
+
   // ── 2. Create lesson row (pending) ──
   const { data: lessonRow, error: insertErr } = await supabase
     .from("lessons")
@@ -394,7 +433,36 @@ export async function POST(req: NextRequest) {
   if (insertErr || !lessonRow) {
     // Refund the credit
     await supabase.rpc("add_user_credits", { user_id_input: user_id, amount: 1 });
+    // Log the refund
+    try {
+      const { data: refundCreditData } = await supabase
+        .from("user_credits")
+        .select("remaining_credits")
+        .eq("user_id", user_id)
+        .single();
+      await supabase.from("credit_transactions").insert({
+        user_id: user_id,
+        type: "refund",
+        amount: 1,
+        balance_after: (refundCreditData?.remaining_credits ?? 0) + 1,
+        description: `Refunded — failed to create lesson record: ${config.topic || config.class_name}`,
+      });
+    } catch {}
     return NextResponse.json({ error: "Failed to create lesson record" }, { status: 500 });
+  }
+
+  // Log the debit transaction now that lesson row exists
+  try {
+    await supabase.from("credit_transactions").insert({
+      user_id: user_id,
+      type: "debit",
+      amount: 1,
+      balance_after: creditDataAfterBurn?.remaining_credits ?? 0,
+      description: `Lesson generated: ${config.topic || config.class_name}`,
+      lesson_id: lessonRow.id,
+    });
+  } catch (txErr) {
+    console.error("[api/generate-lesson] Failed to log debit transaction:", txErr);
   }
 
   // ── 3. Return immediately ──
