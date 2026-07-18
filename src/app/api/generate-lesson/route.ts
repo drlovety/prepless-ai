@@ -219,7 +219,7 @@ ${buildRoadmap(config)}`;
     `- Colors: Primary ${config.primary_color || "#8B0000"}, Secondary ${config.secondary_color || "#FFD700"}`,
     "",
     retryError ? `PREVIOUS ATTENTION ERROR — fix this: ${retryError}\n` : "",
-    `SOURCE MATERIAL:\n${sourceText.slice(0, 8000)}`,
+    `SOURCE MATERIAL:\n${sourceText.slice(0, 40000)}`,
     "",
     `Generate the LessonDay JSON now.`,
   ];
@@ -385,7 +385,7 @@ export async function POST(req: NextRequest) {
       status: "pending",
       class_name: config.class_name,
       topic: config.topic || "",
-      source_text: source_text.slice(0, 5000),
+      source_text: source_text,
       credits_used: 1,
     })
     .select("id")

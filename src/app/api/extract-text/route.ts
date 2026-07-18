@@ -155,12 +155,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Cap at 15K chars for the API response
-    const cappedText = extractedText.slice(0, 15000);
-
     return NextResponse.json({
       success: true,
-      text: cappedText,
+      text: extractedText,
       fileName: file.name,
       fileType,
       isScanned: fileType === "application/pdf" || fileName.endsWith(".pdf") ? isScanned : undefined,
