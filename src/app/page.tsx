@@ -27,7 +27,7 @@ export default function Home() {
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
-        emailRedirectTo: "https://prepless-ai.vercel.app/auth/callback",
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
     setLoading(false);

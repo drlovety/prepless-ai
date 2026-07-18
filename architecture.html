@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prepless AI — Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#020617;
+    color:#e2e8f0;
+    font-family: 'JetBrains Mono', monospace;
+    padding:40px;
+    line-height:1.45;
+  }
+  .header { margin-bottom:24px; }
+  .header h1 { font-size:22px; font-weight:700; color:#f8fafc; display:flex; align-items:center; gap:10px; }
+  .pulse { width:10px; height:10px; border-radius:50%; background:#ef4444; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(239,68,68,0.6);} 70%{box-shadow:0 0 0 10px rgba(239,68,68,0);} 100%{box-shadow:0 0 0 0 rgba(239,68,68,0);} }
+  .subtitle { color:#94a3b8; font-size:12px; margin-top:4px; }
+  .diagram-box { border:1px solid #1e293b; border-radius:12px; padding:20px; background:#0b1221; overflow-x:auto; margin-bottom:24px; }
+  svg { display:block; margin:0 auto; }
+  .cards { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; }
+  .card { border:1px solid #1e293b; border-radius:10px; padding:16px; background:#0f172a; }
+  .card-header { display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
+  .dot { width:8px; height:8px; border-radius:50%; }
+  .dot.cyan { background:#22d3ee; }
+  .dot.green { background:#34d399; }
+  .dot.violet { background:#a78bfa; }
+  .dot.amber { background:#fbbf24; }
+  .dot.red { background:#ef4444; }
+  .card ul { list-style:none; }
+  .card li { font-size:11px; color:#94a3b8; margin-bottom:6px; padding-left:12px; position:relative; }
+  .card li::before { content:"•"; position:absolute; left:0; color:#64748b; }
+  .footer { margin-top:24px; font-size:10px; color:#475569; }
+  .label-box { font-size:8px; fill:#94a3b8; }
+  @media(max-width:900px){ .cards{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span class="pulse"></span>Prepless AI — System Architecture</h1>
+  <div class="subtitle">Current state + the generation-path problem + three options to fix it</div>
+</div>
+
+<div class="diagram-box">
+<svg width="960" height="820" viewBox="0 0 960 820">
+
+  <!-- Grid -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#475569"/>
+    </marker>
+    <marker id="arrowhead-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444"/>
+    </marker>
+    <marker id="arrowhead-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
+    </marker>
+    <marker id="arrowhead-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee"/>
+    </marker>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#grid)"/>
+
+  <!-- ========== ROW 1: TEACHER BROWSER ========== -->
+  <rect x="40" y="20" width="240" height="56" rx="6" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="160" y="44" text-anchor="middle" fill="#22d3ee" font-size="12" font-weight="600">Teacher Browser</text>
+  <text x="160" y="60" text-anchor="middle" fill="#64748b" font-size="8">Dashboard / Lesson Viewer / Settings</text>
+
+  <!-- Arrows to Vercel -->
+  <line x1="280" y1="48" x2="360" y2="48" stroke="#475569" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <text x="320" y="40" text-anchor="middle" fill="#64748b" font-size="7">HTTPS</text>
+
+
+  <!-- ========== ROW 2: VERCEL APP (blue border) ========== -->
+  <rect x="360" y="6" width="560" height="196" rx="12" fill="none" stroke="#22d3ee" stroke-width="2" stroke-dasharray="8,4"/>
+  <text x="640" y="24" text-anchor="middle" fill="#22d3ee" font-size="9" font-weight="600">VERCEL (Next.js 16 — Serverless)</text>
+
+  <!-- Components inside Vercel -->
+  <rect x="380" y="34" width="140" height="46" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="450" y="55" text-anchor="middle" fill="#22d3ee" font-size="11" font-weight="600">Dashboard Pages</text>
+  <text x="450" y="69" text-anchor="middle" fill="#64748b" font-size="7">Server + Client Components</text>
+
+  <rect x="540" y="34" width="140" height="46" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="610" y="55" text-anchor="middle" fill="#22d3ee" font-size="11" font-weight="600">API Routes</text>
+  <text x="610" y="69" text-anchor="middle" fill="#64748b" font-size="7">/api/* — 10s max (Hobby)</text>
+
+  <rect x="700" y="34" width="140" height="46" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="770" y="55" text-anchor="middle" fill="#22d3ee" font-size="11" font-weight="600">Auth Middleware</text>
+  <text x="770" y="69" text-anchor="middle" fill="#64748b" font-size="7">Supabase SSR</text>
+
+  <!-- Generate Lesson Route (THE PROBLEM) -->
+  <rect x="540" y="100" width="140" height="54" rx="6" fill="rgba(136,19,55,0.35)" stroke="#ef4444" stroke-width="2"/>
+  <text x="610" y="122" text-anchor="middle" fill="#ef4444" font-size="11" font-weight="600">/api/generate-lesson</text>
+  <text x="610" y="138" text-anchor="middle" fill="#94a3b8" font-size="7">POST → burn credit → create pending row</text>
+  <text x="610" y="148" text-anchor="middle" fill="#ef4444" font-size="7" font-weight="600">PROBLEM: background promise can die</text>
+
+  <!-- PPTX/DOCX Export -->
+  <rect x="380" y="100" width="140" height="44" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="450" y="120" text-anchor="middle" fill="#22d3ee" font-size="10" font-weight="500">/api/export-*</text>
+  <text x="450" y="134" text-anchor="middle" fill="#64748b" font-size="7">PPTX + DOCX (fast, safe)</text>
+
+  <!-- Notifications -->
+  <rect x="700" y="100" width="140" height="44" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="770" y="120" text-anchor="middle" fill="#22d3ee" font-size="10" font-weight="500">/api/notifications</text>
+  <text x="770" y="134" text-anchor="middle" fill="#64748b" font-size="7">Bell polling 10s</text>
+
+  <!-- Extract Text -->
+  <rect x="380" y="160" width="140" height="36" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="450" y="182" text-anchor="middle" fill="#22d3ee" font-size="10" font-weight="500">/api/extract-text</text>
+
+  <rect x="540" y="160" width="140" height="36" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="610" y="182" text-anchor="middle" fill="#22d3ee" font-size="10" font-weight="500">/api/redeem-code</text>
+
+
+  <!-- ========== ROW 3: SUPABASE (purple border) ========== -->
+  <rect x="360" y="216" width="560" height="136" rx="12" fill="none" stroke="#a78bfa" stroke-width="2" stroke-dasharray="8,4"/>
+  <text x="640" y="234" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">SUPABASE (Postgres + Auth)</text>
+
+  <rect x="380" y="248" width="120" height="40" rx="6" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="440" y="268" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="600">auth.users</text>
+  <text x="440" y="280" text-anchor="middle" fill="#64748b" font-size="7">Session / JWT</text>
+
+  <rect x="520" y="248" width="130" height="40" rx="6" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="585" y="268" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="600">lessons</text>
+  <text x="585" y="280" text-anchor="middle" fill="#64748b" font-size="7">pending → complete/failed</text>
+
+  <rect x="670" y="248" width="130" height="40" rx="6" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="735" y="268" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="600">user_credits</text>
+  <text x="735" y="280" text-anchor="middle" fill="#64748b" font-size="7">Atomic burn / refund</text>
+
+  <rect x="520" y="300" width="130" height="40" rx="6" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="585" y="320" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="600">notifications</text>
+  <text x="585" y="332" text-anchor="middle" fill="#64748b" font-size="7">Bell dropdown items</text>
+
+  <rect x="670" y="300" width="130" height="40" rx="6" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="735" y="320" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="600">user_settings</text>
+  <text x="735" y="332" text-anchor="middle" fill="#64748b" font-size="7">School config, class configs</text>
+
+
+  <!-- ========== ROW 4: THE BROKEN PATH ========== -->
+  <!-- OpenRouter -->
+  <rect x="40" y="400" width="220" height="60" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="150" y="428" text-anchor="middle" fill="#94a3b8" font-size="12" font-weight="600">OpenRouter / DeepSeek</text>
+  <text x="150" y="446" text-anchor="middle" fill="#64748b" font-size="8">3–5 min response time</text>
+
+  <!-- Arrow from generate-lesson to OpenRouter (dashed = might die) -->
+  <path d="M 540 154 L 150 154 L 150 400" fill="none" stroke="#ef4444" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrowhead-red)"/>
+  <text x="300" y="145" fill="#ef4444" font-size="8" font-weight="600">BROKEN PATH</text>
+  <text x="120" y="280" fill="#ef4444" font-size="8">Vercel may kill container</text>
+  <text x="120" y="292" fill="#ef4444" font-size="8">before response returns</text>
+
+  <!-- Back to Supabase -->
+  <path d="M 40 430 L 40 268 L 380 268" fill="none" stroke="#ef4444" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrowhead-red)"/>
+  <text x="60" y="345" fill="#ef4444" font-size="8">Sometimes never arrives</text>
+
+
+  <!-- ========== ROW 5: THE THREE FIX OPTIONS ========== -->
+  <text x="480" y="490" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">OPTION A → B → C: Fix the Generation Path</text>
+
+
+  <!-- OPTION A: Inngest -->
+  <rect x="40" y="520" width="280" height="110" rx="12" fill="none" stroke="#22d3ee" stroke-width="2" stroke-dasharray="8,4"/>
+  <text x="180" y="540" text-anchor="middle" fill="#22d3ee" font-size="11" font-weight="700">OPTION A: Inngest</text>
+
+  <rect x="60" y="558" width="120" height="42" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="120" y="578" text-anchor="middle" fill="#22d3ee" font-size="10" font-weight="600">Inngest Cloud</text>
+  <text x="120" y="592" text-anchor="middle" fill="#64748b" font-size="7">Durable execution</text>
+
+  <rect x="195" y="558" width="110" height="42" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="250" y="578" text-anchor="middle" fill="#34d399" font-size="10" font-weight="600">Step Function</text>
+  <text x="250" y="592" text-anchor="middle" fill="#64748b" font-size="7">Auto-retry on crash</text>
+
+  <text x="180" y="620" text-anchor="middle" fill="#94a3b8" font-size="8">Pros: Resumable after crash · 50k free/mo</text>
+  <text x="180" y="634" text-anchor="middle" fill="#ef4444" font-size="8">Con: Another vendor, another bill + key</text>
+
+
+  <!-- OPTION B: QStash -->
+  <rect x="340" y="520" width="280" height="110" rx="12" fill="none" stroke="#fbbf24" stroke-width="2" stroke-dasharray="8,4"/>
+  <text x="480" y="540" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="700">OPTION B: QStash</text>
+
+  <rect x="360" y="558" width="120" height="42" rx="6" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="420" y="578" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="600">QStash Queue</text>
+  <text x="420" y="592" text-anchor="middle" fill="#64748b" font-size="7">Upstash message bus</text>
+
+  <rect x="495" y="558" width="110" height="42" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="550" y="578" text-anchor="middle" fill="#34d399" font-size="10" font-weight="600">Vercel Worker</text>
+  <text x="550" y="592" text-anchor="middle" fill="#64748b" font-size="7">Still functn timeout risk</text>
+
+  <text x="480" y="620" text-anchor="middle" fill="#94a3b8" font-size="8">Pros: Cheap (~$1/mo), simple queue</text>
+  <text x="480" y="634" text-anchor="middle" fill="#ef4444" font-size="8">Con: Worker still on Vercel → 60-900s cap</text>
+
+
+  <!-- OPTION C: Background Worker -->
+  <rect x="640" y="520" width="280" height="110" rx="12" fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="8,4"/>
+  <text x="780" y="540" text-anchor="middle" fill="#34d399" font-size="11" font-weight="700">OPTION C: Worker</text>
+
+  <rect x="660" y="558" width="120" height="42" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="720" y="578" text-anchor="middle" fill="#34d399" font-size="10" font-weight="600">Linux Box</text>
+  <text x="720" y="592" text-anchor="middle" fill="#64748b" font-size="7">$0 testing right now</text>
+
+  <rect x="795" y="558" width="110" height="42" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="850" y="578" text-anchor="middle" fill="#34d399" font-size="10" font-weight="600">Railway/Render</text>
+  <text x="850" y="592" text-anchor="middle" fill="#64748b" font-size="7">$5/mo at launch</text>
+
+  <text x="780" y="620" text-anchor="middle" fill="#94a3b8" font-size="8">Pros: No timeouts, no new vendors, owns queue</text>
+  <text x="780" y="634" text-anchor="middle" fill="#34d399" font-size="8">Con: One tiny container to babysit</text>
+
+
+  <!-- ========== ROW 6: RECOMMENDED FLOW ========== -->
+  <text x="480" y="680" text-anchor="middle" fill="#f8fafc" font-size="14" font-weight="700">RECOMMENDED TESTING PATH</text>
+
+  <rect x="40" y="700" width="880" height="100" rx="12" fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="4,2"/>
+
+  <!-- Box 1 -->
+  <rect x="70" y="718" width="160" height="50" rx="6" fill="rgba(6,78,59,0.2)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="150" y="736" text-anchor="middle" fill="#34d399" font-size="10" font-weight="600">Teacher clicks</text>
+  <text x="150" y="748" text-anchor="middle" fill="#94a3b8" font-size="8">"Generate Lesson"</text>
+  <text x="150" y="760" text-anchor="middle" fill="#94a3b8" font-size="8">POST to Vercel</text>
+
+  <line x1="230" y1="743" x2="280" y2="743" stroke="#475569" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <text x="255" y="735" text-anchor="middle" fill="#64748b" font-size="7">502? No.</text>
+
+  <!-- Box 2 -->
+  <rect x="300" y="718" width="160" height="50" rx="6" fill="rgba(76,29,149,0.2)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="380" y="736" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="600">Vercel burns credit</text>
+  <text x="380" y="748" text-anchor="middle" fill="#94a3b8" font-size="8">Sets status = pending</text>
+  <text x="380" y="760" text-anchor="middle" fill="#94a3b8" font-size="8">Returns HTTP 202</text>
+
+  <line x1="460" y1="743" x2="510" y2="743" stroke="#475569" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <text x="485" y="735" text-anchor="middle" fill="#64748b" font-size="7">30s</text>
+
+  <!-- Box 3 -->
+  <rect x="530" y="718" width="160" height="50" rx="6" fill="rgba(6,78,59,0.2)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="610" y="736" text-anchor="middle" fill="#34d399" font-size="10" font-weight="600">Worker polls DB</text>
+  <text x="610" y="748" text-anchor="middle" fill="#94a3b8" font-size="8">Finds pending lesson</text>
+  <text x="610" y="760" text-anchor="middle" fill="#94a3b8" font-size="8">Calls DeepSeek</text>
+
+  <line x1="690" y1="743" x2="740" y2="743" stroke="#475569" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <text x="715" y="735" text-anchor="middle" fill="#64748b" font-size="7">5 min</text>
+
+  <!-- Box 4 -->
+  <rect x="760" y="718" width="140" height="50" rx="6" fill="rgba(76,29,149,0.2)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="830" y="736" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="600">Supabase updated</text>
+  <text x="830" y="748" text-anchor="middle" fill="#94a3b8" font-size="8">status = complete</text>
+  <text x="830" y="760" text-anchor="middle" fill="#94a3b8" font-size="8">Notification sent</text>
+
+</svg>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-header"><div class="dot red"></div><div style="color:#ef4444">Current Risk</div></div>
+    <ul>
+      <li>Generation runs inside Vercel HTTP handler</li>
+      <li>Vercel hobby = 10s max / Pro = 60s max</li>
+      <li>DeepSeek response = 3-5 min</li>
+      <li>"Floating promise" dies silently on container freeze</li>
+      <li>Lesson stuck in "pending" forever ~20% of calls</li>
+      <li>Impossible to tell if bug is prompt or infra</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="dot green"></div><div style="color:#34d399">What Already Works</div></div>
+    <ul>
+      <li>Auth, credits, settings — all solid</li>
+      <li>JSON validation + retry loop catches schema failures</li>
+      <li>Supabase notifications + sidebar polling</li>
+      <li>PPTX/DOCX export fast and reliable</li>
+      <li>Text extraction (PDF/DOCX/OCR) works</li>
+      <li>Credit burn / refund atomic via RPC</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="dot cyan"></div><div style="color:#22d3ee">Decision Checklist</div></div>
+    <ul>
+      <li>Keep Vercel for app shell? YES — perfect fit</li>
+      <li>Keep Supabase? YES — auth + DB + notifications</li>
+      <li>Move generation off Vercel? YES — required for reliability</li>
+      <li>Inngest vs Worker? Inngest = easier · Worker = cheaper/owned</li>
+      <li>Test on Linux box first? YES — zero cost, full control</li>
+    </ul>
+  </div>
+</div>
+
+<div class="footer">
+  Prepless AI Architecture · Generated for internal review · All flows shown are current as of July 2026
+</div>
+
+</body>
+</html>

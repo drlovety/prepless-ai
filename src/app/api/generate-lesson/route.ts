@@ -230,7 +230,7 @@ ${buildRoadmap(config)}`;
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://prepless-ai.vercel.app",
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://prepless-ai.up.railway.app",
       "X-Title": "PrepLessAI",
     },
     body: JSON.stringify({
