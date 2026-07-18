@@ -64,6 +64,7 @@ export default function Dashboard() {
   const [primaryColor, setPrimaryColor] = useState("#8B0000");
   const [secondaryColor, setSecondaryColor] = useState("#FFD700");
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [classConfigs, setClassConfigs] = useState<Record<string, any>>({});
 
   const router = useRouter();
 
@@ -103,6 +104,9 @@ export default function Dashboard() {
       setRigor(data.default_rigor || "standard");
       setIncludeJournal(!!data.include_journal);
       setIncludeEssential(!!data.include_essential_questions);
+      if (data.class_configs) {
+        setClassConfigs(data.class_configs);
+      }
     }
     setSettingsLoaded(true);
   };
@@ -168,6 +172,8 @@ export default function Dashboard() {
     setGenError("");
     setGenerating(true);
 
+    const classConfig = classConfigs[selectedClass] || {};
+
     const config = {
       class_name: selectedClass,
       unit: unit || "Unit 3",
@@ -183,6 +189,7 @@ export default function Dashboard() {
       school_mascot: schoolMascot,
       primary_color: primaryColor,
       secondary_color: secondaryColor,
+      class_config: classConfig,
     };
 
     const res = await fetch("/api/generate-lesson", {
@@ -343,7 +350,18 @@ export default function Dashboard() {
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label>Class / Subject</Label>
-                  <Select value={selectedClass} onValueChange={(val) => setSelectedClass(val ?? "")}>
+                  <Select value={selectedClass} onValueChange={(val) => {
+                    const cls = val ?? "";
+                    setSelectedClass(cls);
+                    // Auto-populate from class config
+                    const cfg = classConfigs[cls];
+                    if (cfg) {
+                      setDuration(String(cfg.period_length || "50"));
+                      setRigor(cfg.rigor || "standard");
+                      setIncludeJournal((cfg.always_include || []).includes("journal"));
+                      setIncludeEssential((cfg.always_include || []).includes("essential_question"));
+                    }
+                  }}>
                     <SelectTrigger><SelectValue placeholder="Select a class" /></SelectTrigger>
                     <SelectContent>
                       {CTE_CLASSES.map((cls) => (

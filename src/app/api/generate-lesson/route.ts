@@ -1,8 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// ── Build roadmap from class config ──
+function buildRoadmap(config: any): string {
+  const cc = config.class_config;
+  if (!cc) return "";
+  const parts: string[] = [];
+  parts.push(`LESSON ROADMAP for ${config.class_name}:`);
+  if (cc.target_slides) parts.push(`- Produce exactly ${cc.target_slides} slides total. No more, no fewer.`);
+  if (cc.min_activities && cc.max_activities) {
+    parts.push(`- Include ${cc.min_activities}-${cc.max_activities} activities. Each activity MUST have both an activity_intro slide and an activity_recap slide.`);
+  }
+  if (cc.preferred_activity_types?.length) {
+    parts.push(`- Preferred activity types: ${cc.preferred_activity_types.join(", ")}. Use these when possible.`);
+  }
+  if (cc.required_slide_types?.length) {
+    parts.push(`- REQUIRED slide types that MUST appear: ${cc.required_slide_types.join(", ")}.`);
+  }
+  if (cc.always_include?.length) {
+    const mapped: Record<string, string> = {
+      journal: "journal_prompt slide",
+      exit_ticket: "exit_ticket slide",
+      essential_question: "learning_objective slide with essential question framing",
+    };
+    parts.push(`- Always include: ${cc.always_include.map((k: string) => mapped[k] || k).join(", ")}.`);
+  }
+  if (cc.real_world_anchor) {
+    parts.push(`- Real-world anchor: All examples MUST reference ${cc.real_world_anchor}. Use specific local business names, numbers, and data.`);
+  }
+  parts.push(`- Rigor level: ${cc.rigor || "standard"}.`);
+  parts.push(`- NO filler slides. Every slide must directly serve the learning objective.`);
+  return parts.join("\n");
+}
+
 // ── Validation ──
-function validateLessonJson(json: any): string | null {
+function validateLessonJson(json: any, config?: any): string | null {
   if (!json || typeof json !== "object") return "Response is not an object";
 
   const requiredKeys = ["metadata", "slides", "activities", "lesson_plan"];
@@ -28,6 +60,20 @@ function validateLessonJson(json: any): string | null {
   // ── Slides ──
   if (!Array.isArray(json.slides)) return "slides is not an array";
   if (json.slides.length < 3) return `Only ${json.slides.length} slides (need at least 3)`;
+
+  // Roadmap enforcement
+  const cc = config?.class_config;
+  if (cc?.target_slides && json.slides.length !== cc.target_slides) {
+    return `Slide count mismatch: got ${json.slides.length}, roadmap requires exactly ${cc.target_slides}`;
+  }
+  if (cc?.required_slide_types?.length) {
+    const presentTypes = new Set(json.slides.map((s: any) => s.slide_type));
+    for (const req of cc.required_slide_types) {
+      if (!presentTypes.has(req)) {
+        return `Missing required slide type: ${req}. Present types: ${Array.from(presentTypes).join(", ")}`;
+      }
+    }
+  }
 
   const allowedSlideTypes = new Set([
     "title", "hook", "learning_objective", "journal_prompt", "prior_review",
@@ -71,6 +117,15 @@ function validateLessonJson(json: any): string | null {
 
   // ── Activities ──
   if (!Array.isArray(json.activities)) return "activities is not an array";
+
+  // Roadmap activity count enforcement
+  if (cc?.min_activities && json.activities.length < cc.min_activities) {
+    return `Too few activities: got ${json.activities.length}, roadmap requires minimum ${cc.min_activities}`;
+  }
+  if (cc?.max_activities && json.activities.length > cc.max_activities) {
+    return `Too many activities: got ${json.activities.length}, roadmap requires maximum ${cc.max_activities}`;
+  }
+
   for (const [i, act] of json.activities.entries()) {
     if (!act || typeof act !== "object") return `activity[${i}] is not an object`;
     if (typeof act.activity_id !== "string") return `activity[${i}] activity_id must be a string`;
@@ -142,10 +197,12 @@ LESSON_PLAN: {duration_breakdown, learning_objectives, instructional_phases, tea
 RULES:
 1. Output ONLY valid flat JSON. No markdown, no code fences.
 2. Use REAL examples with specific local businesses, numbers, names.
-3. 10-15 slides total. Core concept slides ~5. Minimum 2 activities (activity_intro + activity_recap slides for each).
-4. NO answers on student-facing materials. Answer keys in lesson_plan.answer_keys only.
-5. At least 3 slides with has_image=true and descriptive image_search_query.
-6. Extract content from source material. Do not invent generic content.`;
+3. NO answers on student-facing materials. Answer keys in lesson_plan.answer_keys only.
+4. At least 3 slides with has_image=true and descriptive image_search_query.
+5. Extract content from source material. Do not invent generic content.
+6. FOLLOW THE ROADMAP BELOW EXACTLY.
+
+${buildRoadmap(config)}`;
 
   const userPromptParts = [
     `TEACHER INPUT:`,
@@ -215,12 +272,12 @@ async function runGeneration(
 
   try {
     lessonJson = await callOpenRouter(sourceText, config);
-    validationError = validateLessonJson(lessonJson);
+    validationError = validateLessonJson(lessonJson, config);
 
     if (validationError) {
       console.log(`[attempt 1] Validation failed: ${validationError}`);
       lessonJson = await callOpenRouter(sourceText, config, validationError);
-      validationError = validateLessonJson(lessonJson);
+      validationError = validateLessonJson(lessonJson, config);
     }
   } catch (err: any) {
     console.error(`[background] Generation failed for lesson ${lessonId}:`, err.message);

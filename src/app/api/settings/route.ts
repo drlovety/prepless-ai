@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
     "default_duration", "default_rigor",
     "include_journal", "include_exit_ticket",
     "include_essential_questions", "include_handouts", "include_card_sets",
+    "class_configs",
   ];
 
   const update: Record<string, any> = {};
