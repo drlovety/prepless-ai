@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDocumentProxy, renderPageAsImage } from "unpdf";
 import Tesseract from "tesseract.js";
 
+import path from "path";
+
 // Pre-initialize tesseract worker (lazy — created on first OCR need)
 let tesseractWorker: Awaited<ReturnType<typeof Tesseract.createWorker>> | null = null;
 
 async function getWorker() {
   if (!tesseractWorker) {
-    tesseractWorker = await Tesseract.createWorker("eng");
+    // Use bundled trained data to avoid CDN downloads in serverless env
+    const langPath = path.join(process.cwd(), "public", "tessdata");
+    tesseractWorker = await Tesseract.createWorker("eng", 1, {
+      langPath,
+    });
   }
   return tesseractWorker;
 }
