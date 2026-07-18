@@ -140,6 +140,8 @@ export default function Dashboard() {
 
     const fd = new FormData();
     fd.append("file", file);
+    if (startPage) fd.append("startPage", startPage);
+    if (endPage) fd.append("endPage", endPage);
 
     const res = await fetch("/api/extract-text", { method: "POST", body: fd });
     const data = await res.json();
@@ -150,11 +152,11 @@ export default function Dashboard() {
     }
 
     setExtractedText(data.text);
-    setScanWarning(
-      data.isScanned
-        ? "Scanned/image PDF detected. Text extraction is limited. If the preview below looks empty or incomplete, please paste the source text directly into the preview box."
-        : ""
-    );
+    const warnings: string[] = [];
+    if (data.pageInfo) warnings.push(`Extracted from ${data.pageInfo}.`);
+    if (data.ocrUsed) warnings.push("Scanned PDF detected — text was recovered via OCR. Review the preview for accuracy.");
+    else if (data.isScanned) warnings.push("Scanned/image PDF detected. Text extraction is limited. If the preview looks empty or garbled, paste the source text directly.");
+    setScanWarning(warnings.join(" "));
     setShowPreview(true);
   };
 
