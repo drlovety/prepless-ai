@@ -221,7 +221,7 @@ export default function Dashboard() {
     );
   };
 
-  const canGenerate = uploadedFile && selectedClass && remainingCredits > 0 && !generating;
+  const canGenerate = (uploadedFile || extractedText.trim().length > 0) && selectedClass && remainingCredits > 0 && !generating;
 
   return (
     <main className="flex-1 px-6 py-8">
@@ -285,6 +285,31 @@ export default function Dashboard() {
                   <p className="text-sm font-medium">Click to upload or drag and drop</p>
                   <p className="text-xs text-muted-foreground mt-1">PDF, DOCX, PNG, JPG up to 20MB</p>
                   <input id="file-upload" type="file" className="hidden" accept=".pdf,.docx,.png,.jpg,.jpeg" onChange={handleUpload} />
+                </div>
+
+                <div className="relative py-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or paste text</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="paste-text">Paste source material</Label>
+                  <Textarea
+                    id="paste-text"
+                    placeholder="Paste textbook chapter, email, or webpage content here..."
+                    rows={6}
+                    value={extractedText}
+                    onChange={(e) => {
+                      setExtractedText(e.target.value);
+                      if (e.target.value.trim().length > 0) setShowPreview(true);
+                    }}
+                    className="resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground">Paste text directly instead of uploading a file.</p>
                 </div>
 
                 {uploadedFile && (
@@ -464,7 +489,14 @@ export default function Dashboard() {
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between py-2 border-b">
                     <span className="text-muted-foreground">Source</span>
-                    <span className="font-medium">{uploadedFile?.name || "Not uploaded"}</span>
+                    <span className="font-medium text-right">
+                      {uploadedFile?.name || (extractedText.trim().length > 0 ? "Pasted text" : "Not provided")}
+                      {extractedText.trim().length > 0 && (
+                        <span className="block text-xs text-muted-foreground font-normal">
+                          {extractedText.trim().split(/\s+/).length} words
+                        </span>
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between py-2 border-b">
                     <span className="text-muted-foreground">Pages</span>

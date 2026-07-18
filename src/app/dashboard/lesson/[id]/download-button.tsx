@@ -5,17 +5,19 @@ import { FileDown, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 
-export default function DownloadPptxButton({ lessonId }: { lessonId: string }) {
-  const [loading, setLoading] = useState(false);
+type ExportFormat = "pptx" | "docx";
 
-  const handleDownload = async () => {
-    setLoading(true);
+export default function DownloadButtons({ lessonId }: { lessonId: string }) {
+  const [loading, setLoading] = useState<Record<ExportFormat, boolean>>({ pptx: false, docx: false });
+
+  const handleDownload = async (format: ExportFormat) => {
+    setLoading((prev) => ({ ...prev, [format]: true }));
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setLoading(false); return; }
+    if (!session) { setLoading((prev) => ({ ...prev, [format]: false })); return; }
 
     try {
-      const res = await fetch("/api/export-pptx", {
+      const res = await fetch(`/api/export-${format}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -26,8 +28,8 @@ export default function DownloadPptxButton({ lessonId }: { lessonId: string }) {
 
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || "Failed to generate PPTX");
-        setLoading(false);
+        alert(err.error || `Failed to generate ${format.toUpperCase()}`);
+        setLoading((prev) => ({ ...prev, [format]: false }));
         return;
       }
 
@@ -35,7 +37,7 @@ export default function DownloadPptxButton({ lessonId }: { lessonId: string }) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = res.headers.get("content-disposition")?.split('filename="')[1]?.replace('"', '') || "lesson.pptx";
+      a.download = res.headers.get("content-disposition")?.split('filename="')[1]?.replace('"', '') || `lesson.${format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -43,13 +45,19 @@ export default function DownloadPptxButton({ lessonId }: { lessonId: string }) {
     } catch (e) {
       alert("Download failed");
     }
-    setLoading(false);
+    setLoading((prev) => ({ ...prev, [format]: false }));
   };
 
   return (
-    <Button onClick={handleDownload} disabled={loading} variant="outline" size="sm">
-      {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileDown className="h-4 w-4 mr-1" />}
-      Download PPTX
-    </Button>
+    <div className="flex gap-2">
+      <Button onClick={() => handleDownload("pptx")} disabled={loading.pptx} variant="outline" size="sm">
+        {loading.pptx ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileDown className="h-4 w-4 mr-1" />}
+        PPTX
+      </Button>
+      <Button onClick={() => handleDownload("docx")} disabled={loading.docx} variant="outline" size="sm">
+        {loading.docx ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileDown className="h-4 w-4 mr-1" />}
+        DOCX
+      </Button>
+    </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-browser";
-import { Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Clock, CheckCircle, XCircle, Loader2, Wallet, History } from "lucide-react";
 
 interface Lesson {
   id: string;
@@ -14,16 +14,26 @@ interface Lesson {
   credits_used: number;
 }
 
+interface CreditLedgerEntry {
+  type: "debit" | "credit";
+  amount: number;
+  reason: string;
+  created_at: string;
+}
+
 export default function SidebarLessons() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [remainingCredits, setRemainingCredits] = useState(0);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) { setLoading(false); return; }
       fetchLessons(session.access_token);
+      fetchCredits(supabase, session.access_token);
     });
   }, []);
 
@@ -42,6 +52,14 @@ export default function SidebarLessons() {
     }
   };
 
+  const fetchCredits = async (supabaseClient: any, token: string) => {
+    const res = await fetch("/api/my-credits", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (res.ok) setRemainingCredits(data.remaining_credits ?? 0);
+  };
+
   const statusIcon = (status: string) => {
     switch (status) {
       case "complete": return <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />;
@@ -56,6 +74,14 @@ export default function SidebarLessons() {
     const d = new Date(iso);
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
+
+  // Build simple ledger from lessons (debits) + placeholder for redemptions (fetched separately)
+  const ledger: CreditLedgerEntry[] = lessons.map((l) => ({
+    type: "debit" as const,
+    amount: l.credits_used,
+    reason: l.topic || l.class_name || "Lesson",
+    created_at: l.created_at,
+  }));
 
   return (
     <div className="w-64 bg-muted/30 flex flex-col overflow-hidden border-r shrink-0">
@@ -89,6 +115,40 @@ export default function SidebarLessons() {
             </div>
           </Link>
         ))}
+      </div>
+
+      {/* ── Credit Footer ── */}
+      <div className="border-t p-3 shrink-0">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">{remainingCredits} credit{remainingCredits !== 1 ? "s" : ""}</span>
+          </div>
+          <button
+            onClick={() => setShowHistory((prev) => !prev)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <History className="h-3 w-3" />
+            {showHistory ? "Hide" : "History"}
+          </button>
+        </div>
+
+        {showHistory && (
+          <div className="space-y-1 max-h-48 overflow-y-auto border rounded-md p-2 bg-background">
+            {ledger.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-2">No history yet.</p>
+            )}
+            {ledger.map((entry, i) => (
+              <div key={i} className="flex items-center justify-between text-xs">
+                <span className="truncate flex-1 mr-2 text-muted-foreground" title={entry.reason}>
+                  {entry.reason}
+                </span>
+                <span className="text-red-500 font-mono shrink-0">-{entry.amount}</span>
+              </div>
+            ))}
+            <p className="text-[10px] text-muted-foreground text-center pt-1 border-t">Redemptions not shown yet</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -3,9 +3,9 @@ import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Clock, BookOpen, Lightbulb, CheckCircle } from "lucide-react";
+import { ArrowLeft, Clock, BookOpen, Lightbulb, CheckCircle, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
-import DownloadPptxButton from "./download-button";
+import DownloadButtons from "./download-button";
 
 export const revalidate = 0;
 
@@ -58,8 +58,55 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
     .eq("id", id)
     .single();
 
-  if (error || !lesson || lesson.status !== "complete") {
+  if (error || !lesson) {
     notFound();
+  }
+
+  // ── Pending / Failed status page ──
+  if (lesson.status !== "complete") {
+    const isPending = lesson.status === "pending" || lesson.status === "generating";
+    return (
+      <main className="flex-1 px-6 py-8">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <Link href="/dashboard">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="h-4 w-4 mr-1" /> Back
+            </Button>
+          </Link>
+          <Card>
+            <CardContent className="py-16 text-center space-y-4">
+              {isPending ? (
+                <>
+                  <Loader2 className="h-10 w-10 animate-spin text-amber-500 mx-auto" />
+                  <h2 className="text-xl font-semibold">Lesson is generating...</h2>
+                  <p className="text-muted-foreground max-w-md mx-auto">
+                    DeepSeek is working on <strong>{lesson.topic || lesson.class_name || "your lesson"}</strong>.
+                    You'll get a notification when it's ready.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-10 w-10 text-red-500 mx-auto" />
+                  <h2 className="text-xl font-semibold">Generation failed</h2>
+                  <p className="text-muted-foreground max-w-md mx-auto">
+                    Something went wrong generating <strong>{lesson.topic || lesson.class_name || "your lesson"}</strong>.
+                    Your credit has been refunded.
+                  </p>
+                  <div className="flex gap-3 justify-center pt-2">
+                    <Link href="/dashboard">
+                      <Button>Try Again</Button>
+                    </Link>
+                  </div>
+                </>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Created {new Date(lesson.created_at).toLocaleString("en-US")}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+    );
   }
 
   const json = lesson.generated_json as LessonJson;
@@ -104,7 +151,7 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
             <p className="text-muted-foreground">
               {metadata.school_info?.name || "Your School"} · {metadata.class_duration_min || 50} minutes · {activities.length} activities
             </p>
-            <DownloadPptxButton lessonId={id} />
+            <DownloadButtons lessonId={id} />
           </div>
         </div>
 
