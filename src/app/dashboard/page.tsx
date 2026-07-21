@@ -185,6 +185,7 @@ export default function Dashboard() {
       rigor,
       include_journal: includeJournal,
       include_essential: includeEssential,
+      include_photos: includePhotos,
       school_name: schoolName,
       school_city: "Everett",
       school_state: "WA",

@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -16,13 +15,10 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const cookieStore = await cookies();
-    console.log("[auth/callback] cookies on callback:", cookieStore.getAll().map(c => c.name));
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
     }
-    // Log the actual error for debugging
     console.error("[auth/callback] exchangeCodeForSession failed:", error.message, "| code:", error.code, "| origin:", origin);
     return NextResponse.redirect(`${origin}/?error=${encodeURIComponent(error.code || "auth_failed")}&msg=${encodeURIComponent(error.message.slice(0, 200))}`);
   }

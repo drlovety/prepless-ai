@@ -13,3 +13,6 @@ declare module "tesseract.js" {
   export function createWorker(lang: string, oem?: number, config?: any): Promise<any>;
   export function setLogging(logging: boolean): void;
 }
+
+declare module "docx";
+declare module "pptxgenjs";

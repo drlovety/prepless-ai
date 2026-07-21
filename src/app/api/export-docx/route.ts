@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, UnderlineType, Table, TableCell, TableRow, WidthType, BorderStyle } from "docx";
 
 function getSupabase() {
   return createClient(
@@ -63,7 +62,19 @@ export async function POST(req: NextRequest) {
   const plan = json.lesson_plan || {};
   const school = metadata.school_info || {};
 
-  const children: Paragraph[] = [];
+  let docxModule: typeof import("docx") | null = null;
+  try {
+    docxModule = await import("docx");
+  } catch {
+    return NextResponse.json(
+      { error: "DOCX export is temporarily unavailable. Rendering libraries have been removed to reduce build size. Contact your admin to re-enable exports." },
+      { status: 503 }
+    );
+  }
+
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docxModule;
+
+  const children: any[] = [];
 
   // ── Header ──
   children.push(

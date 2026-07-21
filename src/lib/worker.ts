@@ -192,7 +192,7 @@ RULES:
 1. Output ONLY valid flat JSON. No markdown, no code fences.
 2. Use REAL examples with specific local businesses, numbers, names.
 3. NO answers on student-facing materials. Answer keys in lesson_plan.answer_keys only.
-4. At least 3 slides with has_image=true and descriptive image_search_query.
+4. ${config.include_photos ? `At least 3 slides with has_image=true and descriptive image_search_query.` : `Set has_image=false on all slides. Do not include image_search_query.`}
 5. Extract content from source material. Do not invent generic content.
 6. FOLLOW THE ROADMAP BELOW EXACTLY.
 
@@ -208,6 +208,7 @@ ${buildRoadmap(config)}`;
     `- Rigor: ${config.rigor || "standard"}`,
     `- Include journal: ${config.include_journal}`,
     `- Include essential questions: ${config.include_essential}`,
+    `- Include AI-generated photos/illustrations: ${config.include_photos ?? false}`,
     `- School: ${config.school_name || "Cascade High School"} in ${config.school_city || "Everett"}, ${config.school_state || "WA"}`,
     `- Mascot: ${config.school_mascot || "Bruins"}`,
     `- Colors: Primary ${config.primary_color || "#8B0000"}, Secondary ${config.secondary_color || "#FFD700"}`,

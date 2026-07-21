@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import PptxGenJS from "pptxgenjs";
 
 const BG_COLOR = "3C0F14";
 const TEXT_COLOR = "F5F5F5";
@@ -32,7 +31,7 @@ function hexToRgba(hex: string, alpha: number): [number, number, number, number]
   return [r, g, b, Math.round(alpha * 255)];
 }
 
-function addTitleSlide(pres: PptxGenJS, metadata: any) {
+function addTitleSlide(PptxGenJS: any, pres: any, metadata: any) {
   const slide = pres.addSlide();
   slide.background = { color: BG_COLOR };
 
@@ -62,7 +61,7 @@ function addTitleSlide(pres: PptxGenJS, metadata: any) {
   }
 }
 
-function addContentSlide(pres: PptxGenJS, slideData: any) {
+function addContentSlide(PptxGenJS: any, pres: any, slideData: any) {
   const slide = pres.addSlide();
   slide.background = { color: BG_COLOR };
 
@@ -83,7 +82,7 @@ function addContentSlide(pres: PptxGenJS, slideData: any) {
       x: 6.5, y: 1.5, w: 3, h: 1.5,
       fontSize: 11, color: ACCENT_COLOR, fontFace: "Arial",
       align: "center", valign: "middle",
-      shape: pres.ShapeType.rect,
+      shape: PptxGenJS.ShapeType.rect,
       line: { color: ACCENT_COLOR, width: 1 },
     });
   }
@@ -180,6 +179,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Lesson not found or not complete" }, { status: 404 });
   }
 
+  let PptxGenJS: any;
+  try {
+    PptxGenJS = (await import("pptxgenjs")).default;
+  } catch {
+    return NextResponse.json(
+      { error: "PPTX export is temporarily unavailable. Rendering libraries have been removed to reduce build size. Contact your admin to re-enable exports." },
+      { status: 503 }
+    );
+  }
+
   const json = lesson.generated_json || {};
   const metadata = json.metadata || {};
   const slides = json.slides || [];
@@ -192,12 +201,12 @@ export async function POST(req: NextRequest) {
   pres.subject = metadata.topic || lesson.topic || "Lesson";
 
   // Title slide
-  addTitleSlide(pres, metadata);
+  addTitleSlide(PptxGenJS, pres, metadata);
 
   // Content slides
   for (const slideData of slides) {
     if (slideData.slide_type === "title") continue; // skip duplicate title
-    addContentSlide(pres, slideData);
+    addContentSlide(PptxGenJS, pres, slideData);
   }
 
   // Generate blob
