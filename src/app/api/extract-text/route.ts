@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDocumentProxy, renderPageAsImage } from "unpdf";
-import Tesseract from "tesseract.js";
 
 import path from "path";
 
-// Pre-initialize tesseract worker (lazy — created on first OCR need)
-let tesseractWorker: Awaited<ReturnType<typeof Tesseract.createWorker>> | null = null;
+// OCR is optional — requires canvas + tesseract.js (heavy, ~180MB).
+// Only installed in environments that need scanned-PDF support.
+let tesseractWorker: any = null;
 
 async function getWorker() {
-  if (!tesseractWorker) {
-    // Use bundled trained data to avoid CDN downloads in serverless env
+  if (tesseractWorker) return tesseractWorker;
+  try {
+    const Tesseract = await import("tesseract.js");
     const langPath = path.join(process.cwd(), "public", "tessdata");
-    tesseractWorker = await Tesseract.createWorker("eng", 1, {
-      langPath,
-    });
+    tesseractWorker = await Tesseract.createWorker("eng", 1, { langPath });
+    return tesseractWorker;
+  } catch {
+    return null;
   }
-  return tesseractWorker;
 }
 
 /**
@@ -52,7 +53,7 @@ async function extractPdfText(
 
 /**
  * Fallback OCR for scanned PDFs.
- * Renders each page as an image and runs Tesseract OCR.
+ * Requires canvas + tesseract.js. If not installed, returns empty text.
  * Limited to max 10 pages to avoid timeouts.
  */
 async function ocrPdfPages(
@@ -61,19 +62,27 @@ async function ocrPdfPages(
   endPage: number,
   maxPages = 10
 ): Promise<{ text: string; pagesOcr: number }> {
-  const canvas = await import("canvas");
+  let canvas: any;
+  try {
+    canvas = await import("canvas");
+  } catch {
+    return { text: "", pagesOcr: 0 };
+  }
+
+  const worker = await getWorker();
+  if (!worker) return { text: "", pagesOcr: 0 };
+
   const pdf = await getDocumentProxy(uint8Array, { canvasImport: () => canvas } as any);
   const totalPages = pdf.numPages;
   const start = Math.max(1, startPage || 1);
   const end = Math.min(totalPages, endPage || totalPages, start + maxPages - 1);
 
-  const worker = await getWorker();
   const pageTexts: string[] = [];
 
   for (let i = start; i <= end; i++) {
     const imgBuf = await renderPageAsImage(pdf, i, {
       canvasImport: () => canvas,
-      scale: 2, // higher scale = better OCR accuracy
+      scale: 2,
     } as any);
     const buffer = Buffer.from(imgBuf);
     const result = await worker.recognize(buffer);
