@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase-server";
+import { cookies } from "next/headers";
 
 export async function sendMagicLink(email: string) {
   const supabase = await createClient();
@@ -12,6 +13,10 @@ export async function sendMagicLink(email: string) {
       emailRedirectTo: `${origin}/auth/callback`,
     },
   });
+
+  const allCookies = (await cookies()).getAll();
+  console.log("[sendMagicLink] cookies after signInWithOtp:", allCookies.map(c => c.name));
+  console.log("[sendMagicLink] signInWithOtp result:", { data: !!data, error: error?.message, code: error?.code });
 
   if (error) {
     return { success: false, error: error.message };
