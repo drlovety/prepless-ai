@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import IORedis from "ioredis";
 
 export async function GET(req: NextRequest) {
   const checks: Record<string, boolean | string> = {};
@@ -16,6 +17,21 @@ export async function GET(req: NextRequest) {
 
   // App URL
   checks.app_url = process.env.NEXT_PUBLIC_APP_URL || "not set";
+
+  // Redis — actually ping it
+  checks.redis_url = !!process.env.REDIS_URL;
+  if (process.env.REDIS_URL) {
+    try {
+      const redis = new IORedis(process.env.REDIS_URL, { connectTimeout: 3000 });
+      await redis.ping();
+      checks.redis_available = true;
+      await redis.quit();
+    } catch (e: any) {
+      checks.redis_available = e.message || "connection failed";
+    }
+  } else {
+    checks.redis_available = "not configured";
+  }
 
   // Headers (check proxy awareness)
   checks.x_forwarded_host = req.headers.get("x-forwarded-host") || "not present (direct request)";

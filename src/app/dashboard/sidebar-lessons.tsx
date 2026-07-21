@@ -43,6 +43,20 @@ export default function SidebarLessons() {
     });
   }, []);
 
+  // Poll for status updates when there are pending/generating lessons
+  useEffect(() => {
+    if (!sessionToken) return;
+    const hasActive = lessons.some((l) => l.status === "pending" || l.status === "generating");
+    if (!hasActive) return;
+
+    const interval = setInterval(() => {
+      fetchLessons(sessionToken);
+      fetchCredits(createClient(), sessionToken);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [lessons, sessionToken]);
+
   const formatDate = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
