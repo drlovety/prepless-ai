@@ -19,7 +19,10 @@ export async function GET(request: Request) {
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
     }
+    // Log the actual error for debugging
+    console.error("[auth/callback] exchangeCodeForSession failed:", error.message, "| code:", error.code, "| origin:", origin);
+    return NextResponse.redirect(`${origin}/?error=${encodeURIComponent(error.code || "auth_failed")}&msg=${encodeURIComponent(error.message.slice(0, 200))}`);
   }
 
-  return NextResponse.redirect(`${origin}/?error=auth_failed`);
+  return NextResponse.redirect(`${origin}/?error=no_code`);
 }
