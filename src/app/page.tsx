@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Mail, Loader2, CheckCircle } from "lucide-react";
-import { createClient } from "@/lib/supabase-browser";
+import { sendMagicLink } from "./actions";
 import { useState } from "react";
 
 export default function Home() {
@@ -23,17 +23,11 @@ export default function Home() {
     }
 
     setLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    const result = await sendMagicLink(email.trim());
     setLoading(false);
 
-    if (error) {
-      setError(error.message);
+    if (!result.success) {
+      setError(result.error || "Failed to send magic link.");
       return;
     }
 
