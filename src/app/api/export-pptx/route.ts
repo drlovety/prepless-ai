@@ -179,29 +179,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Lesson not found or not complete" }, { status: 404 });
   }
 
-  // ── Storage fast-path (rendered by pipeline) ──
-  {
-    const { data: { publicUrl } } = supabase.storage
-      .from("lesson-exports")
-      .getPublicUrl(`lessons/${lesson_id}/lesson.pptx`);
-    try {
-      const head = await fetch(publicUrl, { method: "HEAD" });
-      if (head.ok) {
-        const blob = await fetch(publicUrl).then((r) => r.arrayBuffer());
-        const filename = `${(lesson.topic || "lesson").replace(/[^a-zA-Z0-9\-_\.]/g, "_")}.pptx`;
-        return new NextResponse(new Uint8Array(blob), {
-          status: 200,
-          headers: {
-            "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            "Content-Disposition": `attachment; filename="${filename}"`,
-          },
-        });
-      }
-    } catch {
-      /* fall through to on-demand generation */
-    }
-  }
-
   let PptxGenJS: any;
   try {
     PptxGenJS = (await import("pptxgenjs")).default;
