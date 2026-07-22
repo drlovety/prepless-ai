@@ -3,6 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 import { addJobInlineOrQueued } from "@/lib/queue";
 import { processLessonJob } from "@/lib/worker";
 
+// Start the background worker when this module first loads (lazy, idempotent)
+import { startLessonWorker } from "@/lib/queue";
+startLessonWorker(processLessonJob);
+
 // ── API Route ──
 export async function POST(req: NextRequest) {
   let body: any;
