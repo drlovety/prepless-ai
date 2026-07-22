@@ -16,32 +16,41 @@ export async function POST(req: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  // 1. Fetch the access code
+  const upperCode = code.toUpperCase();
+
+  // 1. Fetch an unused code
   const { data: codeRecord, error: codeError } = await supabase
     .from("access_codes")
     .select("*")
-    .eq("code", code.toUpperCase())
-    .gt("remaining_uses", 0)
+    .eq("code", upperCode)
+    .eq("used", false)
     .single();
 
   if (codeError || !codeRecord) {
-    return NextResponse.json({ success: false, error: "Invalid or exhausted code" }, { status: 400 });
+    return NextResponse.json({ success: false, error: "Invalid or already used code" }, { status: 400 });
   }
 
-  // 2. Atomically decrement uses
-  const { error: decrError } = await supabase
-    .rpc("decrement_code_uses", { code_input: code.toUpperCase() });
+  const creditAmount = codeRecord.credits ?? 1;
 
-  if (decrError) {
-    return NextResponse.json({ success: false, error: "Code already exhausted" }, { status: 400 });
+  // 2. Mark code as used
+  const { error: updateError } = await supabase
+    .from("access_codes")
+    .update({ used: true, used_by: user_id, used_at: new Date().toISOString() })
+    .eq("code", upperCode);
+
+  if (updateError) {
+    return NextResponse.json({ success: false, error: "Failed to redeem code" }, { status: 500 });
   }
 
-  // 3. Add credits to user
-  const creditAmount = codeRecord.credits_per_use ?? 1;
-  const { error: creditError } = await supabase
-    .rpc("add_user_credits", { user_id_input: user_id, amount: creditAmount });
+  // 3. Add credits to user (upsert)
+  const { error: upsertError } = await supabase
+    .from("user_credits")
+    .upsert(
+      { user_id, remaining_credits: creditAmount },
+      { onConflict: "user_id" }
+    );
 
-  if (creditError) {
+  if (upsertError) {
     return NextResponse.json({ success: false, error: "Failed to apply credits" }, { status: 500 });
   }
 
@@ -52,14 +61,14 @@ export async function POST(req: NextRequest) {
     .eq("user_id", user_id)
     .single();
 
-  // 4. Log redemption transaction
+  // 5. Log redemption transaction
   try {
     await supabase.from("credit_transactions").insert({
       user_id: user_id,
       type: "redemption",
       amount: creditAmount,
       balance_after: credits?.remaining_credits ?? creditAmount,
-      description: `Code redeemed: ${code.toUpperCase()}`,
+      description: `Code redeemed: ${upperCode}`,
     });
   } catch (txErr) {
     console.error("[redeem-code] Failed to log redemption transaction:", txErr);
