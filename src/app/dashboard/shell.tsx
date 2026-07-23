@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, Settings, Plus, Ticket, Bell, CheckCircle, XCircle, Loader2, Clock } from "lucide-react";
+import { LogOut, Settings, Plus, Ticket, Bell, CheckCircle, XCircle, Loader2, Clock, Shield } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
@@ -24,6 +24,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [user, setUser] = useState<any>(null);
   const [remainingCredits, setRemainingCredits] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isAdminUser, setIsAdminUser] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [codeSuccess, setCodeSuccess] = useState("");
@@ -48,6 +49,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       setUser(data.user);
       loadCredits(supabase, data.user.id);
       loadNotifications(data.user.id);
+      checkAdmin(supabase, data.user.id);
       setLoading(false);
     });
   }, []);
@@ -121,6 +123,15 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     setAccessCode("");
     setShowCodeInput(false);
     setTimeout(() => setCodeSuccess(""), 3000);
+  };
+
+  const checkAdmin = async (supabaseClient: any, userId: string) => {
+    const { data } = await supabaseClient
+      .from("user_settings")
+      .select("is_admin")
+      .eq("user_id", userId)
+      .single();
+    setIsAdminUser(!!data?.is_admin);
   };
 
   const handleLogout = async () => {
@@ -261,6 +272,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
             {codeError && <span className="text-xs text-red-500">{codeError}</span>}
             {codeSuccess && <span className="text-xs text-green-600">{codeSuccess}</span>}
+            {isAdminUser && (
+              <Link href="/admin">
+                <Button variant="ghost" size="sm"><Shield className="h-4 w-4 mr-1" /> Admin</Button>
+              </Link>
+            )}
             {isNewLesson ? (
               <Link href="/dashboard/settings">
                 <Button variant="ghost" size="sm"><Settings className="h-4 w-4 mr-1" /> Settings</Button>

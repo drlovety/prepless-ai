@@ -264,10 +264,32 @@ function getSupabase() {
   );
 }
 
+// ── Error logging helper ──
+async function logLlmError(supabase: any, lessonId: string, userId: string, errorType: string, errorMessage: string, attemptNumber: number, modelUsed?: string) {
+  try {
+    await supabase.from("llm_errors").insert({
+      lesson_id: lessonId,
+      user_id: userId,
+      error_type: errorType,
+      error_message: errorMessage.slice(0, 2000),
+      attempt_number: attemptNumber,
+      model_used: modelUsed || "deepseek/deepseek-chat",
+    });
+  } catch (err) {
+    console.error("[worker] Failed to log LLM error:", err);
+  }
+}
+
 // ── Job processor (runs in BullMQ worker or inline) ──
 export async function processLessonJob(job: Job) {
   const { lessonId, userId, sourceText, config } = job.data;
   const supabase = getSupabase();
+
+  // Mark generation as started
+  await supabase
+    .from("lessons")
+    .update({ status: "generating", started_at: new Date().toISOString() })
+    .eq("id", lessonId);
 
   let lessonJson: any;
   let validationError: string | null = null;
@@ -311,13 +333,20 @@ export async function processLessonJob(job: Job) {
     }
   } catch (err: any) {
     const isTimeout = err.name === "AbortError" || err.message?.toLowerCase().includes("aborted");
-    console.error(`[worker] Generation failed for lesson ${lessonId}${isTimeout ? " (timeout after 8 min)" : ""}:`, err.message || err);
+    const errorType = isTimeout ? "timeout" : "openrouter";
+    const errorMessage = err.message || String(err);
+    console.error(`[worker] Generation failed for lesson ${lessonId}${isTimeout ? " (timeout after 8 min)" : ""}:`, errorMessage);
     await supabase
       .from("lessons")
-      .update({ status: "failed", updated_at: new Date().toISOString() })
+      .update({ status: "failed", updated_at: new Date().toISOString(), completed_at: new Date().toISOString(), error_type: errorType, error_message: errorMessage.slice(0, 500) })
       .eq("id", lessonId);
-    await supabase.rpc("add_user_credits", { user_id_input: userId, amount: 1 });
-    await logTransaction("refund", 1, `Refunded — ${isTimeout ? "generation timed out" : "generation failed"}: ${config.topic || config.class_name}`);
+    await logLlmError(supabase, lessonId, userId, errorType, errorMessage, 1);
+    // Only refund if credits were actually burned
+    const { data: lessonRow } = await supabase.from("lessons").select("credits_used").eq("id", lessonId).single();
+    if (lessonRow && lessonRow.credits_used > 0) {
+      await supabase.rpc("add_user_credits", { user_id_input: userId, amount: lessonRow.credits_used });
+      await logTransaction("refund", lessonRow.credits_used, `Refunded — ${isTimeout ? "generation timed out" : "generation failed"}: ${config.topic || config.class_name}`);
+    }
     try {
       await supabase.from("notifications").insert({
         user_id: userId,
@@ -336,10 +365,15 @@ export async function processLessonJob(job: Job) {
     console.error(`[worker] Validation failed after retry for lesson ${lessonId}: ${validationError}`);
     await supabase
       .from("lessons")
-      .update({ status: "failed", updated_at: new Date().toISOString() })
+      .update({ status: "failed", updated_at: new Date().toISOString(), completed_at: new Date().toISOString(), error_type: "validation", error_message: validationError.slice(0, 500) })
       .eq("id", lessonId);
-    await supabase.rpc("add_user_credits", { user_id_input: userId, amount: 1 });
-    await logTransaction("refund", 1, `Refunded — validation failed: ${config.topic || config.class_name}`);
+    await logLlmError(supabase, lessonId, userId, "validation", validationError, 2);
+    // Only refund if credits were actually burned
+    const { data: lessonRow2 } = await supabase.from("lessons").select("credits_used").eq("id", lessonId).single();
+    if (lessonRow2 && lessonRow2.credits_used > 0) {
+      await supabase.rpc("add_user_credits", { user_id_input: userId, amount: lessonRow2.credits_used });
+      await logTransaction("refund", lessonRow2.credits_used, `Refunded — validation failed: ${config.topic || config.class_name}`);
+    }
     try {
       await supabase.from("notifications").insert({
         user_id: userId,
@@ -361,6 +395,7 @@ export async function processLessonJob(job: Job) {
       status: "complete",
       generated_json: lessonJson,
       updated_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
     })
     .eq("id", lessonId);
 

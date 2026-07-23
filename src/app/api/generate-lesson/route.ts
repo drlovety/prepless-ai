@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isAdmin } from "@/lib/admin";
 import { addJobInlineOrQueued } from "@/lib/queue";
 import { processLessonJob } from "@/lib/worker";
 
@@ -27,25 +28,34 @@ export async function POST(req: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  // ── 1. Burn credit atomically ──
-  const { data: burned, error: burnErr } = await supabase.rpc("burn_credit", {
-    user_id_input: user_id,
-    amount: 1,
-  });
+  // ── 1. Check admin (bypass credits) or burn credit ──
+  const admin = await isAdmin(user_id);
+  let creditsUsed = 1;
+  let creditDataAfterBurn: any = null;
 
-  if (burnErr || !burned) {
-    return NextResponse.json(
-      { error: "Insufficient credits. Add an access code or purchase more." },
-      { status: 402 }
-    );
+  if (!admin) {
+    const { data: burned, error: burnErr } = await supabase.rpc("burn_credit", {
+      user_id_input: user_id,
+      amount: 1,
+    });
+
+    if (burnErr || !burned) {
+      return NextResponse.json(
+        { error: "Insufficient credits. Add an access code or purchase more." },
+        { status: 402 }
+      );
+    }
+
+    // Get current balance for transaction log
+    const { data: afterBurn } = await supabase
+      .from("user_credits")
+      .select("remaining_credits")
+      .eq("user_id", user_id)
+      .single();
+    creditDataAfterBurn = afterBurn;
+  } else {
+    creditsUsed = 0; // admin generates for free
   }
-
-  // Get current balance for transaction log
-  const { data: creditDataAfterBurn } = await supabase
-    .from("user_credits")
-    .select("remaining_credits")
-    .eq("user_id", user_id)
-    .single();
 
   // ── 2. Create lesson row (pending) ──
   const { data: lessonRow, error: insertErr } = await supabase
@@ -56,44 +66,48 @@ export async function POST(req: NextRequest) {
       class_name: config.class_name,
       topic: config.topic || "",
       source_text: source_text,
-      credits_used: 1,
+      credits_used: creditsUsed,
     })
     .select("id")
     .single();
 
   if (insertErr || !lessonRow) {
-    // Refund the credit
-    await supabase.rpc("add_user_credits", { user_id_input: user_id, amount: 1 });
-    // Log the refund
-    try {
-      const { data: refundCreditData } = await supabase
-        .from("user_credits")
-        .select("remaining_credits")
-        .eq("user_id", user_id)
-        .single();
-      await supabase.from("credit_transactions").insert({
-        user_id: user_id,
-        type: "refund",
-        amount: 1,
-        balance_after: (refundCreditData?.remaining_credits ?? 0) + 1,
-        description: `Refunded — failed to create lesson record: ${config.topic || config.class_name}`,
-      });
-    } catch {}
+    // Refund the credit (only if credits were actually used)
+    if (creditsUsed > 0) {
+      await supabase.rpc("add_user_credits", { user_id_input: user_id, amount: creditsUsed });
+      // Log the refund
+      try {
+        const { data: refundCreditData } = await supabase
+          .from("user_credits")
+          .select("remaining_credits")
+          .eq("user_id", user_id)
+          .single();
+        await supabase.from("credit_transactions").insert({
+          user_id: user_id,
+          type: "refund",
+          amount: creditsUsed,
+          balance_after: (refundCreditData?.remaining_credits ?? 0) + creditsUsed,
+          description: `Refunded — failed to create lesson record: ${config.topic || config.class_name}`,
+        });
+      } catch {}
+    }
     return NextResponse.json({ error: "Failed to create lesson record" }, { status: 500 });
   }
 
-  // Log the debit transaction now that lesson row exists
-  try {
-    await supabase.from("credit_transactions").insert({
-      user_id: user_id,
-      type: "debit",
-      amount: 1,
-      balance_after: creditDataAfterBurn?.remaining_credits ?? 0,
-      description: `Lesson generated: ${config.topic || config.class_name}`,
-      lesson_id: lessonRow.id,
-    });
-  } catch (txErr) {
-    console.error("[api/generate-lesson] Failed to log debit transaction:", txErr);
+  // Log the debit transaction now that lesson row exists (only for non-admins)
+  if (creditsUsed > 0 && creditDataAfterBurn) {
+    try {
+      await supabase.from("credit_transactions").insert({
+        user_id: user_id,
+        type: "debit",
+        amount: creditsUsed,
+        balance_after: creditDataAfterBurn.remaining_credits ?? 0,
+        description: `Lesson generated: ${config.topic || config.class_name}`,
+        lesson_id: lessonRow.id,
+      });
+    } catch (txErr) {
+      console.error("[api/generate-lesson] Failed to log debit transaction:", txErr);
+    }
   }
 
   // ── 3. Enqueue (or run inline if no Redis) ──
