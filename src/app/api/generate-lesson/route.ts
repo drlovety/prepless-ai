@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isAdmin } from "@/lib/admin";
+import { burnCredits, addCredits, getRemainingCredits } from "@/lib/credits";
 import { addJobInlineOrQueued } from "@/lib/queue";
 import { processLessonJob } from "@/lib/worker";
 
@@ -31,28 +32,18 @@ export async function POST(req: NextRequest) {
   // ── 1. Check admin (bypass credits) or burn credit ──
   const admin = await isAdmin(user_id);
   let creditsUsed = 1;
-  let creditDataAfterBurn: any = null;
+  let creditDataAfterBurn: number | null = null;
 
   if (!admin) {
-    const { data: burned, error: burnErr } = await supabase.rpc("burn_credit", {
-      user_id_input: user_id,
-      amount: 1,
-    });
-
-    if (burnErr || !burned) {
+    const burned = await burnCredits(user_id, 1);
+    if (!burned) {
       return NextResponse.json(
         { error: "Insufficient credits. Add an access code or purchase more." },
         { status: 402 }
       );
     }
 
-    // Get current balance for transaction log
-    const { data: afterBurn } = await supabase
-      .from("user_credits")
-      .select("remaining_credits")
-      .eq("user_id", user_id)
-      .single();
-    creditDataAfterBurn = afterBurn;
+    creditDataAfterBurn = await getRemainingCredits(user_id);
   } else {
     creditsUsed = 0; // admin generates for free
   }
@@ -74,19 +65,15 @@ export async function POST(req: NextRequest) {
   if (insertErr || !lessonRow) {
     // Refund the credit (only if credits were actually used)
     if (creditsUsed > 0) {
-      await supabase.rpc("add_user_credits", { user_id_input: user_id, amount: creditsUsed });
+      await addCredits(user_id, creditsUsed);
       // Log the refund
       try {
-        const { data: refundCreditData } = await supabase
-          .from("user_credits")
-          .select("remaining_credits")
-          .eq("user_id", user_id)
-          .single();
+        const refundBalance = await getRemainingCredits(user_id);
         await supabase.from("credit_transactions").insert({
           user_id: user_id,
           type: "refund",
           amount: creditsUsed,
-          balance_after: (refundCreditData?.remaining_credits ?? 0) + creditsUsed,
+          balance_after: refundBalance,
           description: `Refunded — failed to create lesson record: ${config.topic || config.class_name}`,
         });
       } catch {}
@@ -95,13 +82,13 @@ export async function POST(req: NextRequest) {
   }
 
   // Log the debit transaction now that lesson row exists (only for non-admins)
-  if (creditsUsed > 0 && creditDataAfterBurn) {
+  if (creditsUsed > 0 && creditDataAfterBurn !== null) {
     try {
       await supabase.from("credit_transactions").insert({
         user_id: user_id,
         type: "debit",
         amount: creditsUsed,
-        balance_after: creditDataAfterBurn.remaining_credits ?? 0,
+        balance_after: creditDataAfterBurn,
         description: `Lesson generated: ${config.topic || config.class_name}`,
         lesson_id: lessonRow.id,
       });

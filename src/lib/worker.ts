@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { Job } from "bullmq";
+import { addCredits } from "./credits";
 
 // ── Build roadmap from class config ──
 function buildRoadmap(config: any): string {
@@ -352,7 +353,7 @@ export async function processLessonJob(job: Job) {
     // Only refund if credits were actually burned
     const { data: lessonRow } = await supabase.from("lessons").select("credits_used").eq("id", lessonId).single();
     if (lessonRow && lessonRow.credits_used > 0) {
-      await supabase.rpc("add_user_credits", { user_id_input: userId, amount: lessonRow.credits_used });
+      await addCredits(userId, lessonRow.credits_used);
       await logTransaction("refund", lessonRow.credits_used, `Refunded — ${isTimeout ? "generation timed out" : "generation failed"}: ${config.topic || config.class_name}`);
     }
     try {
@@ -383,7 +384,7 @@ export async function processLessonJob(job: Job) {
     // Only refund if credits were actually burned
     const { data: lessonRow2 } = await supabase.from("lessons").select("credits_used").eq("id", lessonId).single();
     if (lessonRow2 && lessonRow2.credits_used > 0) {
-      await supabase.rpc("add_user_credits", { user_id_input: userId, amount: lessonRow2.credits_used });
+      await addCredits(userId, lessonRow2.credits_used);
       await logTransaction("refund", lessonRow2.credits_used, `Refunded — validation failed: ${config.topic || config.class_name}`);
     }
     try {

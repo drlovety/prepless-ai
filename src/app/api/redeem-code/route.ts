@@ -42,27 +42,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Failed to redeem code" }, { status: 500 });
   }
 
-  // Add credits to user via RPC (upsert with addition)
-  const { error: creditError } = await supabase.rpc("add_user_credits", {
-    user_id_input: user_id,
-    amount: creditAmount,
-  });
-
-  if (creditError) {
-    // Rollback: mark unused
-    await supabase
-      .from("access_codes")
-      .update({ used: false, used_by: null, used_at: null })
-      .eq("code", upperCode);
-    return NextResponse.json({ success: false, error: "Failed to apply credits" }, { status: 500 });
-  }
-
-  // Get updated total
-  const { data: credits } = await supabase
+  // Add credits to user (manual upsert — RPC functions don't exist yet)
+  const { data: existingCredits } = await supabase
     .from("user_credits")
     .select("remaining_credits")
     .eq("user_id", user_id)
     .single();
+
+  let newBalance: number;
+  if (existingCredits) {
+    newBalance = (existingCredits.remaining_credits ?? 0) + creditAmount;
+    const { error: updErr } = await supabase
+      .from("user_credits")
+      .update({ remaining_credits: newBalance, updated_at: new Date().toISOString() })
+      .eq("user_id", user_id);
+    if (updErr) {
+      // Rollback code
+      await supabase.from("access_codes").update({ used: false, used_by: null, used_at: null }).eq("code", upperCode);
+      return NextResponse.json({ success: false, error: "Failed to apply credits" }, { status: 500 });
+    }
+  } else {
+    newBalance = creditAmount;
+    const { error: insErr } = await supabase.from("user_credits").insert({
+      user_id,
+      remaining_credits: creditAmount,
+      total_purchased: 0,
+    });
+    if (insErr) {
+      // Rollback code
+      await supabase.from("access_codes").update({ used: false, used_by: null, used_at: null }).eq("code", upperCode);
+      return NextResponse.json({ success: false, error: "Failed to apply credits" }, { status: 500 });
+    }
+  }
 
   // Log redemption transaction
   try {
@@ -70,7 +81,7 @@ export async function POST(req: NextRequest) {
       user_id: user_id,
       type: "redemption",
       amount: creditAmount,
-      balance_after: credits?.remaining_credits ?? creditAmount,
+      balance_after: newBalance,
       description: `Code redeemed: ${upperCode}`,
     });
   } catch (txErr) {
@@ -79,6 +90,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    remaining_credits: credits?.remaining_credits ?? creditAmount,
+    remaining_credits: newBalance,
   });
 }
