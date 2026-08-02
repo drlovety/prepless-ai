@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
 import { isAdmin } from "@/lib/admin";
 import Link from "next/link";
-import { Shield, ArrowLeft, LayoutDashboard, Users, AlertTriangle, BookOpen } from "lucide-react";
+import { Shield, ArrowLeft, LayoutDashboard, Users, AlertTriangle, BookOpen, Ticket } from "lucide-react";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -36,6 +36,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <nav className="p-3 space-y-1">
             <AdminNavItem href="/admin" icon={<LayoutDashboard className="h-4 w-4" />} label="Dashboard" />
             <AdminNavItem href="/admin/users" icon={<Users className="h-4 w-4" />} label="Users" />
+            <AdminNavItem href="/admin/codes" icon={<Ticket className="h-4 w-4" />} label="Codes" />
             <AdminNavItem href="/admin/lessons" icon={<BookOpen className="h-4 w-4" />} label="Lessons" />
             <AdminNavItem href="/admin/errors" icon={<AlertTriangle className="h-4 w-4" />} label="LLM Errors" />
           </nav>

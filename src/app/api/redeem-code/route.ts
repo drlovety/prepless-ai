@@ -16,41 +16,44 @@ export async function POST(req: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  const upperCode = code.toUpperCase();
+  const upperCode = code.toUpperCase().trim();
 
-  // 1. Fetch an unused code
+  // 1. Fetch an unused code (remaining_uses > 0 and not expired)
   const { data: codeRecord, error: codeError } = await supabase
     .from("access_codes")
-    .select("*")
+    .select("id, code, remaining_uses, credits_per_use, expires_at")
     .eq("code", upperCode)
-    .eq("used", false)
+    .gt("remaining_uses", 0)
+    .or("expires_at.is.null,expires_at.gte.now()")
     .single();
 
   if (codeError || !codeRecord) {
-    return NextResponse.json({ success: false, error: "Invalid or already used code" }, { status: 400 });
+    return NextResponse.json({ success: false, error: "Invalid, expired, or already used code" }, { status: 400 });
   }
 
-  const creditAmount = codeRecord.credits ?? 1;
+  const creditAmount = codeRecord.credits_per_use ?? 1;
 
-  // 2. Mark code as used
-  const { error: updateError } = await supabase
-    .from("access_codes")
-    .update({ used: true, used_by: user_id, used_at: new Date().toISOString() })
-    .eq("code", upperCode);
+  // 2. Decrement remaining_uses atomically via RPC
+  const { error: rpcError } = await supabase.rpc("decrement_code_uses", {
+    code_input: upperCode,
+  });
 
-  if (updateError) {
-    return NextResponse.json({ success: false, error: "Failed to redeem code" }, { status: 500 });
+  if (rpcError) {
+    return NextResponse.json({ success: false, error: "Failed to redeem code — it may have just been used" }, { status: 500 });
   }
 
-  // 3. Add credits to user (upsert)
-  const { error: upsertError } = await supabase
-    .from("user_credits")
-    .upsert(
-      { user_id, remaining_credits: creditAmount },
-      { onConflict: "user_id" }
-    );
+  // 3. Add credits to user via RPC (upsert with addition)
+  const { error: creditError } = await supabase.rpc("add_user_credits", {
+    user_id_input: user_id,
+    amount: creditAmount,
+  });
 
-  if (upsertError) {
+  if (creditError) {
+    // Rollback: try to restore the use count
+    await supabase
+      .from("access_codes")
+      .update({ remaining_uses: codeRecord.remaining_uses })
+      .eq("id", codeRecord.id);
     return NextResponse.json({ success: false, error: "Failed to apply credits" }, { status: 500 });
   }
 
