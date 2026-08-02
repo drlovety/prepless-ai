@@ -285,11 +285,15 @@ export async function processLessonJob(job: Job) {
   const { lessonId, userId, sourceText, config } = job.data;
   const supabase = getSupabase();
 
-  // Mark generation as started
-  await supabase
-    .from("lessons")
-    .update({ status: "generating", started_at: new Date().toISOString() })
-    .eq("id", lessonId);
+  // Mark generation as started (only update columns that exist)
+  try {
+    await supabase
+      .from("lessons")
+      .update({ status: "generating", updated_at: new Date().toISOString() })
+      .eq("id", lessonId);
+  } catch (updErr) {
+    console.error("[worker] Failed to update lesson status to generating:", updErr);
+  }
 
   let lessonJson: any;
   let validationError: string | null = null;
@@ -336,10 +340,14 @@ export async function processLessonJob(job: Job) {
     const errorType = isTimeout ? "timeout" : "openrouter";
     const errorMessage = err.message || String(err);
     console.error(`[worker] Generation failed for lesson ${lessonId}${isTimeout ? " (timeout after 8 min)" : ""}:`, errorMessage);
-    await supabase
-      .from("lessons")
-      .update({ status: "failed", updated_at: new Date().toISOString(), completed_at: new Date().toISOString(), error_type: errorType, error_message: errorMessage.slice(0, 500) })
-      .eq("id", lessonId);
+    try {
+      await supabase
+        .from("lessons")
+        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .eq("id", lessonId);
+    } catch (updErr) {
+      console.error("[worker] Failed to update lesson status to failed:", updErr);
+    }
     await logLlmError(supabase, lessonId, userId, errorType, errorMessage, 1);
     // Only refund if credits were actually burned
     const { data: lessonRow } = await supabase.from("lessons").select("credits_used").eq("id", lessonId).single();
@@ -363,10 +371,14 @@ export async function processLessonJob(job: Job) {
 
   if (validationError) {
     console.error(`[worker] Validation failed after retry for lesson ${lessonId}: ${validationError}`);
-    await supabase
-      .from("lessons")
-      .update({ status: "failed", updated_at: new Date().toISOString(), completed_at: new Date().toISOString(), error_type: "validation", error_message: validationError.slice(0, 500) })
-      .eq("id", lessonId);
+    try {
+      await supabase
+        .from("lessons")
+        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .eq("id", lessonId);
+    } catch (updErr) {
+      console.error("[worker] Failed to update lesson status to failed:", updErr);
+    }
     await logLlmError(supabase, lessonId, userId, "validation", validationError, 2);
     // Only refund if credits were actually burned
     const { data: lessonRow2 } = await supabase.from("lessons").select("credits_used").eq("id", lessonId).single();
@@ -389,15 +401,18 @@ export async function processLessonJob(job: Job) {
   }
 
   // Save success
-  await supabase
-    .from("lessons")
-    .update({
-      status: "complete",
-      generated_json: lessonJson,
-      updated_at: new Date().toISOString(),
-      completed_at: new Date().toISOString(),
-    })
-    .eq("id", lessonId);
+  try {
+    await supabase
+      .from("lessons")
+      .update({
+        status: "complete",
+        generated_json: lessonJson,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", lessonId);
+  } catch (updErr) {
+    console.error("[worker] Failed to update lesson status to complete:", updErr);
+  }
 
   try {
     await supabase.from("notifications").insert({

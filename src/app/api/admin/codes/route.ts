@@ -10,7 +10,14 @@ function generateCode(length = 8): string {
   return code;
 }
 
-// POST /api/admin/codes — generate new access code(s)
+// Hardcoded admin emails (temporary until user_settings table exists)
+const ADMIN_EMAILS = ["ty.snohomish@gmail.com"];
+
+function isAdmin(email?: string | null): boolean {
+  return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
+// POST /api/admin/codes — generate new access code(s) (OLD schema: code, credits, used)
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("Authorization");
   const token = authHeader?.replace("Bearer ", "") || "";
@@ -21,27 +28,18 @@ export async function POST(req: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  // Verify caller is admin
+  // Verify caller is admin via email
   const { data: userData, error: userErr } = await supabase.auth.getUser(token);
   if (userErr || !userData.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const { data: settings } = await supabase
-    .from("user_settings")
-    .select("is_admin")
-    .eq("user_id", userData.user.id)
-    .single();
-
-  if (!settings?.is_admin) {
+  if (!isAdmin(userData.user.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = await req.json();
   const count = Math.min(Math.max(parseInt(body.count) || 1, 1), 50);
-  const creditsPerUse = Math.max(parseInt(body.credits_per_use) || 10, 1);
-  const totalUses = Math.max(parseInt(body.total_uses) || 1, 1);
-  const expiresAt = body.expires_at || null;
+  const creditsPerCode = Math.max(parseInt(body.credits_per_use) || 10, 1);
 
   const codes: string[] = [];
 
@@ -53,11 +51,8 @@ export async function POST(req: NextRequest) {
     while (attempts < 5) {
       const { error: insertErr } = await supabase.from("access_codes").insert({
         code,
-        total_uses: totalUses,
-        remaining_uses: totalUses,
-        credits_per_use: creditsPerUse,
-        created_by: userData.user.id,
-        expires_at: expiresAt,
+        credits: creditsPerCode,
+        used: false,
       });
 
       if (!insertErr) {
@@ -65,7 +60,6 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      // Collision or other error — try a new code
       code = generateCode(8);
       attempts++;
     }
@@ -74,7 +68,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, codes, count: codes.length });
 }
 
-// GET /api/admin/codes — list recent access codes
+// GET /api/admin/codes — list recent access codes (OLD schema)
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("Authorization");
   const token = authHeader?.replace("Bearer ", "") || "";
@@ -89,20 +83,13 @@ export async function GET(req: NextRequest) {
   if (userErr || !userData.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const { data: settings } = await supabase
-    .from("user_settings")
-    .select("is_admin")
-    .eq("user_id", userData.user.id)
-    .single();
-
-  if (!settings?.is_admin) {
+  if (!isAdmin(userData.user.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { data, error } = await supabase
     .from("access_codes")
-    .select("id, code, total_uses, remaining_uses, credits_per_use, created_at, expires_at")
+    .select("id, code, credits, used, used_by, used_at, created_at")
     .order("created_at", { ascending: false })
     .limit(100);
 

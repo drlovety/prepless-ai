@@ -32,44 +32,49 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 200);
   const offset = parseInt(url.searchParams.get("offset") || "0");
 
-  // Get users with their credit balance and lesson count
-  const { data: users, error } = await supabase
-    .from("user_settings")
-    .select(`
-      id, user_id, school_name, is_admin, created_at,
-      user_credits!left(remaining_credits),
-      lessons(count)
-    `)
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // Get emails from auth.users for these user_ids
-  const userIds = (users ?? []).map((u: any) => u.user_id);
-  const { data: authUsers } = await supabase
+  // Get auth users directly (user_settings table doesn't exist yet)
+  const { data: authUsers, error: authErr } = await supabase
     .schema("auth")
     .from("users")
     .select("id, email, created_at, last_sign_in_at")
-    .in("id", userIds);
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
 
-  const emailMap = new Map((authUsers ?? []).map((u: any) => [u.id, u]));
+  if (authErr) {
+    return NextResponse.json({ error: authErr.message }, { status: 500 });
+  }
 
-  const enriched = (users ?? []).map((u: any) => {
-    const auth = emailMap.get(u.user_id);
-    return {
-      id: u.user_id,
-      email: auth?.email ?? "unknown",
-      school_name: u.school_name,
-      is_admin: u.is_admin,
-      created_at: u.created_at,
-      last_sign_in_at: auth?.last_sign_in_at ?? null,
-      remaining_credits: u.user_credits?.remaining_credits ?? 0,
-      total_lessons: u.lessons?.count ?? 0,
-    };
-  });
+  const userIds = (authUsers ?? []).map((u: any) => u.id);
+
+  // Get credits for these users
+  const { data: creditsData } = await supabase
+    .from("user_credits")
+    .select("user_id, remaining_credits")
+    .in("user_id", userIds);
+
+  const creditMap = new Map((creditsData ?? []).map((c: any) => [c.user_id, c.remaining_credits]));
+
+  // Get lesson counts for these users (count in JS since group() isn't typed)
+  const { data: userLessons } = await supabase
+    .from("lessons")
+    .select("user_id")
+    .in("user_id", userIds);
+
+  const lessonMap = new Map<string, number>();
+  for (const l of (userLessons ?? [])) {
+    lessonMap.set(l.user_id, (lessonMap.get(l.user_id) || 0) + 1);
+  }
+
+  const enriched = (authUsers ?? []).map((u: any) => ({
+    id: u.id,
+    email: u.email ?? "unknown",
+    school_name: "Cascade High School",
+    is_admin: false,
+    created_at: u.created_at,
+    last_sign_in_at: u.last_sign_in_at ?? null,
+    remaining_credits: creditMap.get(u.id) ?? 0,
+    total_lessons: lessonMap.get(u.id) ?? 0,
+  }));
 
   return NextResponse.json({ users: enriched });
 }

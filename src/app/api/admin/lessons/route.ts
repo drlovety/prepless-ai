@@ -33,9 +33,10 @@ export async function GET(req: NextRequest) {
   const offset = parseInt(url.searchParams.get("offset") || "0");
   const statusFilter = url.searchParams.get("status");
 
+  // Only select columns that exist in the current schema
   let query = supabase
     .from("lessons")
-    .select("id, user_id, status, class_name, topic, credits_used, created_at, started_at, completed_at, error_message, error_type")
+    .select("id, user_id, status, class_name, topic, credits_used, created_at, updated_at")
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 

@@ -18,28 +18,35 @@ async function getUserFromToken(req: NextRequest) {
   return user;
 }
 
-// GET /api/settings → fetch user settings
+const DEFAULT_SETTINGS = {
+  school_name: "Cascade High School",
+  mascot: "Bruins",
+  city: "Everett",
+  state: "WA",
+  primary_color: "#8B0000",
+  secondary_color: "#FFD700",
+  default_duration: "50",
+  default_rigor: "standard",
+  include_journal: true,
+  include_exit_ticket: true,
+  include_essential_questions: true,
+  include_handouts: true,
+  include_card_sets: false,
+  class_configs: {},
+};
+
+// GET /api/settings → fetch user settings (returns hardcoded defaults until table exists)
 export async function GET(req: NextRequest) {
   const user = await getUserFromToken(req);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("user_settings")
-    .select("*")
-    .eq("user_id", user.id)
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ settings: data });
+  // user_settings table doesn't exist yet — return defaults
+  return NextResponse.json({ settings: DEFAULT_SETTINGS });
 }
 
-// POST /api/settings → update user settings
+// POST /api/settings → update user settings (no-op until table exists)
 export async function POST(req: NextRequest) {
   const user = await getUserFromToken(req);
   if (!user) {
@@ -53,34 +60,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Whitelist updatable fields
-  const allowed = [
-    "school_name", "mascot", "city", "state",
-    "primary_color", "secondary_color",
-    "default_duration", "default_rigor",
-    "include_journal", "include_exit_ticket",
-    "include_essential_questions", "include_handouts", "include_card_sets",
-    "class_configs",
-  ];
+  // Merge with defaults
+  const merged = { ...DEFAULT_SETTINGS, ...body };
 
-  const update: Record<string, any> = {};
-  for (const key of allowed) {
-    if (key in body) update[key] = body[key];
-  }
-
-  update.updated_at = new Date().toISOString();
-
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("user_settings")
-    .update(update)
-    .eq("user_id", user.id)
-    .select()
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ settings: data });
+  // user_settings table doesn't exist yet — return merged defaults
+  return NextResponse.json({ settings: merged });
 }

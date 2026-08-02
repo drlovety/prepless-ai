@@ -86,33 +86,12 @@ export async function GET(req: NextRequest) {
     .select("*", { count: "exact", head: true })
     .eq("status", "failed");
 
-  // Errors today / this week
-  const { count: totalErrorsToday } = await supabase
-    .from("llm_errors")
-    .select("*", { count: "exact", head: true })
-    .gte("created_at", todayStart.toISOString());
+  // llm_errors table doesn't exist yet — return 0 for error stats
+  const totalErrorsToday = 0;
+  const totalErrorsThisWeek = 0;
 
-  const { count: totalErrorsThisWeek } = await supabase
-    .from("llm_errors")
-    .select("*", { count: "exact", head: true })
-    .gte("created_at", weekStart.toISOString());
-
-  // Avg generation time (lessons with both started_at and completed_at)
-  const { data: timesData } = await supabase
-    .from("lessons")
-    .select("started_at, completed_at")
-    .not("started_at", "is", null)
-    .not("completed_at", "is", null);
-
-  let avgGenerationTimeMin: number | null = null;
-  if (timesData && timesData.length > 0) {
-    const totalSeconds = timesData.reduce((sum, row) => {
-      const s = new Date(row.started_at).getTime();
-      const c = new Date(row.completed_at).getTime();
-      return sum + (c - s) / 1000;
-    }, 0);
-    avgGenerationTimeMin = totalSeconds / timesData.length / 60;
-  }
+  // started_at / completed_at columns don't exist yet — can't compute avg time
+  const avgGenerationTimeMin: number | null = null;
 
   return NextResponse.json({
     totalUsers: totalUsers ?? 0,
@@ -125,8 +104,8 @@ export async function GET(req: NextRequest) {
     generationsThisWeek: generationsThisWeek ?? 0,
     pendingGenerations: pendingGenerations ?? 0,
     failedGenerations: failedGenerations ?? 0,
-    totalErrorsToday: totalErrorsToday ?? 0,
-    totalErrorsThisWeek: totalErrorsThisWeek ?? 0,
+    totalErrorsToday,
+    totalErrorsThisWeek,
     avgGenerationTimeMin,
   });
 }

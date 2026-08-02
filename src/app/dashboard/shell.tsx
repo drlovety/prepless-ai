@@ -126,12 +126,9 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   };
 
   const checkAdmin = async (supabaseClient: any, userId: string) => {
-    const { data } = await supabaseClient
-      .from("user_settings")
-      .select("is_admin")
-      .eq("user_id", userId)
-      .single();
-    setIsAdminUser(!!data?.is_admin);
+    // user_settings table doesn't exist — hardcode admin email
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    setIsAdminUser(user?.email?.toLowerCase() === "ty.snohomish@gmail.com");
   };
 
   const handleLogout = async () => {

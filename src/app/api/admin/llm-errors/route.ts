@@ -27,39 +27,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: e.message }, { status: user ? 403 : 401 });
   }
 
-  const supabase = getSupabase();
-  const url = new URL(req.url);
-  const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 200);
-  const offset = parseInt(url.searchParams.get("offset") || "0");
-  const errorType = url.searchParams.get("error_type");
-
-  let query = supabase
-    .from("llm_errors")
-    .select("id, lesson_id, user_id, error_type, error_message, attempt_number, model_used, created_at")
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  if (errorType) query = query.eq("error_type", errorType);
-
-  const { data: errors, error } = await query;
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // Get user emails
-  const userIds = [...new Set((errors ?? []).map((e: any) => e.user_id))];
-  const { data: authUsers } = await supabase
-    .schema("auth")
-    .from("users")
-    .select("id, email")
-    .in("id", userIds);
-
-  const emailMap = new Map((authUsers ?? []).map((u: any) => [u.id, u.email]));
-
-  const enriched = (errors ?? []).map((e: any) => ({
-    ...e,
-    user_email: emailMap.get(e.user_id) ?? "unknown",
-  }));
-
-  return NextResponse.json({ errors: enriched });
+  // llm_errors table doesn't exist in current schema — return empty
+  return NextResponse.json({ errors: [] });
 }
