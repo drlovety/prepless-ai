@@ -2,12 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isAdmin } from "@/lib/admin";
 import { burnCredits, addCredits, getRemainingCredits } from "@/lib/credits";
-import { addJobInlineOrQueued } from "@/lib/queue";
-import { processLessonJob } from "@/lib/worker";
-
-// Start the background worker when this module first loads (lazy, idempotent)
-import { startLessonWorker } from "@/lib/queue";
-startLessonWorker(processLessonJob);
 
 // ── API Route ──
 export async function POST(req: NextRequest) {
@@ -58,6 +52,7 @@ export async function POST(req: NextRequest) {
       topic: config.topic || "",
       source_text: source_text,
       credits_used: creditsUsed,
+      generated_json: { _pending: true, config, source_text },
     })
     .select("id")
     .single();
@@ -66,7 +61,6 @@ export async function POST(req: NextRequest) {
     // Refund the credit (only if credits were actually used)
     if (creditsUsed > 0) {
       await addCredits(user_id, creditsUsed);
-      // Log the refund
       try {
         const refundBalance = await getRemainingCredits(user_id);
         await supabase.from("credit_transactions").insert({
@@ -97,24 +91,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── 3. Enqueue (or run inline if no Redis) ──
-  const queueResult = await addJobInlineOrQueued(
-    {
-      lessonId: lessonRow.id,
-      userId: user_id,
-      sourceText: source_text,
-      config,
-    },
-    processLessonJob
-  );
-
   return NextResponse.json({
     success: true,
     lesson_id: lessonRow.id,
     status: "pending",
-    queued: queueResult.queued,
-    message: queueResult.queued
-      ? "Your lesson is being generated. You'll be notified when it's ready."
-      : "Your lesson is being generated (inline mode). You'll be notified when it's ready.",
+    message: "Your lesson is being generated. You'll be notified when it's ready.",
   });
 }

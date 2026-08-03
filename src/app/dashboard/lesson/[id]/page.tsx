@@ -151,7 +151,7 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
             <p className="text-muted-foreground">
               {metadata.school_info?.name || "Your School"} · {metadata.class_duration_min || 50} minutes · {activities.length} activities
             </p>
-            <DownloadButtons lessonId={id} />
+            <DownloadButtons lessonId={id} files={lesson.generated_json?._files || {}} />
           </div>
         </div>
 

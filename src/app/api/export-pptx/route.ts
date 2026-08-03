@@ -179,6 +179,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Lesson not found or not complete" }, { status: 404 });
   }
 
+  // If Python worker already built this file, redirect to Supabase Storage
+  const files = lesson.generated_json?._files || {};
+  if (files.pptx_url) {
+    return NextResponse.redirect(files.pptx_url, { status: 302 });
+  }
+
   let PptxGenJS: any;
   try {
     PptxGenJS = (await import("pptxgenjs")).default;

@@ -38,11 +38,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { lesson_id } = body;
+  const { lesson_id, type = "lesson" } = body;
   if (!lesson_id) {
     return NextResponse.json({ error: "Missing lesson_id" }, { status: 400 });
   }
 
+  // Fetch lesson
   const supabase = getSupabase();
   const { data: lesson, error } = await supabase
     .from("lessons")
@@ -53,6 +54,15 @@ export async function POST(req: NextRequest) {
 
   if (error || !lesson || lesson.status !== "complete") {
     return NextResponse.json({ error: "Lesson not found or not complete" }, { status: 404 });
+  }
+
+  // If Python worker already built this file, redirect to Supabase Storage
+  const files = lesson.generated_json?._files || {};
+  if (type === "activity" && files.activity_docx_url) {
+    return NextResponse.redirect(files.activity_docx_url, { status: 302 });
+  }
+  if (type !== "activity" && files.lesson_docx_url) {
+    return NextResponse.redirect(files.lesson_docx_url, { status: 302 });
   }
 
   const json = lesson.generated_json || {};
