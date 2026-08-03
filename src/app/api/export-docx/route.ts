@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabase();
   const { data: lesson, error } = await supabase
     .from("lessons")
-    .select("generated_json, topic, class_name, status, metadata")
+    .select("generated_json, topic, class_name, status")
     .eq("id", lesson_id)
     .eq("user_id", user.id)
     .single();

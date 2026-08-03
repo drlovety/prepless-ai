@@ -4,14 +4,23 @@ import { addCredits } from "./credits";
 
 // ── Build roadmap from class config ──
 function buildRoadmap(config: any): string {
-  const cc = config.class_config;
-  if (!cc) return "";
+  const cc = config.class_config || {};
+
+  // Default activity count by duration
+  const duration = parseInt(config.duration_min) || 50;
+  const defaultMinActivities = duration >= 90 ? 3 : duration >= 55 ? 2 : 1;
+  const defaultMaxActivities = duration >= 90 ? 4 : 3;
+
   const parts: string[] = [];
   parts.push(`LESSON ROADMAP for ${config.class_name}:`);
-  if (cc.target_slides) parts.push(`- Produce exactly ${cc.target_slides} slides total. No more, no fewer.`);
-  if (cc.min_activities && cc.max_activities) {
-    parts.push(`- Include ${cc.min_activities}-${cc.max_activities} activities. Each activity MUST have both an activity_intro slide and an activity_recap slide.`);
-  }
+
+  const targetSlides = cc.target_slides || Math.max(8, Math.ceil(duration / 6));
+  parts.push(`- Produce exactly ${targetSlides} slides total. No more, no fewer.`);
+
+  const minAct = cc.min_activities || defaultMinActivities;
+  const maxAct = cc.max_activities || defaultMaxActivities;
+  parts.push(`- Include ${minAct}-${maxAct} activities. Each activity MUST have both an activity_intro slide and an activity_recap slide.`);
+
   if (cc.preferred_activity_types?.length) {
     parts.push(`- Preferred activity types: ${cc.preferred_activity_types.join(", ")}. Use these when possible.`);
   }
@@ -29,7 +38,7 @@ function buildRoadmap(config: any): string {
   if (cc.real_world_anchor) {
     parts.push(`- Real-world anchor: All examples MUST reference ${cc.real_world_anchor}. Use specific local business names, numbers, and data.`);
   }
-  parts.push(`- Rigor level: ${cc.rigor || "standard"}.`);
+  parts.push(`- Rigor level: ${cc.rigor || config.rigor || "standard"}.`);
   parts.push(`- NO filler slides. Every slide must directly serve the learning objective.`);
   return parts.join("\n");
 }
@@ -60,11 +69,11 @@ function validateLessonJson(json: any, config?: any): string | null {
   if (!Array.isArray(json.slides)) return "slides is not an array";
   if (json.slides.length < 3) return `Only ${json.slides.length} slides (need at least 3)`;
 
-  const cc = config?.class_config;
-  if (cc?.target_slides && json.slides.length !== cc.target_slides) {
+  const cc = config?.class_config || {};
+  if (cc.target_slides && json.slides.length !== cc.target_slides) {
     return `Slide count mismatch: got ${json.slides.length}, roadmap requires exactly ${cc.target_slides}`;
   }
-  if (cc?.required_slide_types?.length) {
+  if (cc.required_slide_types?.length) {
     const presentTypes = new Set(json.slides.map((s: any) => s.slide_type));
     for (const req of cc.required_slide_types) {
       if (!presentTypes.has(req)) {
@@ -115,11 +124,17 @@ function validateLessonJson(json: any, config?: any): string | null {
 
   if (!Array.isArray(json.activities)) return "activities is not an array";
 
-  if (cc?.min_activities && json.activities.length < cc.min_activities) {
-    return `Too few activities: got ${json.activities.length}, roadmap requires minimum ${cc.min_activities}`;
+  // Default activity count validation based on duration
+  const duration = parseInt(config?.duration_min) || 50;
+  const defaultMinAct = duration >= 90 ? 3 : duration >= 55 ? 2 : 1;
+  const defaultMaxAct = duration >= 90 ? 4 : 3;
+  const minAct = cc.min_activities || defaultMinAct;
+  const maxAct = cc.max_activities || defaultMaxAct;
+  if (json.activities.length < minAct) {
+    return `Too few activities: got ${json.activities.length}, roadmap requires minimum ${minAct}`;
   }
-  if (cc?.max_activities && json.activities.length > cc.max_activities) {
-    return `Too many activities: got ${json.activities.length}, roadmap requires maximum ${cc.max_activities}`;
+  if (json.activities.length > maxAct) {
+    return `Too many activities: got ${json.activities.length}, roadmap requires maximum ${maxAct}`;
   }
 
   for (const [i, act] of json.activities.entries()) {
@@ -179,7 +194,7 @@ CONTENT FIELDS BY TYPE:
 - definition_concept: term, definition, why_it_matters, real_world_anchor
 - real_world_example: scenario_title, scenario_description, business_name, numbers_or_data
 - comparison: concept_a, concept_b, pros_a, cons_a, pros_b, cons_b
-- activity_intro: activity_name, instructions, time_limit, materials_needed, grouping
+- activity_intro: activity_name, instructions (student-facing ONLY). time_limit, materials_needed, grouping — these go in lesson_plan.teacher_notes only, NOT in slide content.
 - activity_recap: recap_points (array), connection_to_concept
 - practice: problem_setup, problem_1, problem_2, hint
 - exit_ticket: question_1, question_2, success_criteria

@@ -60,6 +60,8 @@ export default function Dashboard() {
   const [dayNumber, setDayNumber] = useState("1");
   const [topic, setTopic] = useState("");
   const [schoolName, setSchoolName] = useState("Cascade High School");
+  const [schoolCity, setSchoolCity] = useState("");
+  const [schoolState, setSchoolState] = useState("");
   const [schoolMascot, setSchoolMascot] = useState("Bruins");
   const [primaryColor, setPrimaryColor] = useState("#8B0000");
   const [secondaryColor, setSecondaryColor] = useState("#FFD700");
@@ -97,6 +99,8 @@ export default function Dashboard() {
       .single();
     if (data) {
       setSchoolName(data.school_name || "Cascade High School");
+      setSchoolCity(data.school_city || "");
+      setSchoolState(data.school_state || "");
       setSchoolMascot(data.mascot || "Bruins");
       setPrimaryColor(data.primary_color || "#8B0000");
       setSecondaryColor(data.secondary_color || "#FFD700");
@@ -187,8 +191,8 @@ export default function Dashboard() {
       include_essential: includeEssential,
       include_photos: includePhotos,
       school_name: schoolName,
-      school_city: "Everett",
-      school_state: "WA",
+      school_city: schoolCity,
+      school_state: schoolState,
       school_mascot: schoolMascot,
       primary_color: primaryColor,
       secondary_color: secondaryColor,
@@ -459,6 +463,16 @@ export default function Dashboard() {
                 <div className="space-y-2">
                   <Label htmlFor="school-mascot">Mascot</Label>
                   <Input id="school-mascot" value={schoolMascot} onChange={(e) => setSchoolMascot(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="school-city">City</Label>
+                    <Input id="school-city" value={schoolCity} onChange={(e) => setSchoolCity(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="school-state">State</Label>
+                    <Input id="school-state" value={schoolState} onChange={(e) => setSchoolState(e.target.value)} />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
