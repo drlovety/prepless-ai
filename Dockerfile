@@ -12,4 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+ENV PYTHONUNBUFFERED=1
+ENV DEPLOY_TS=2026-08-04T12-00-00
 CMD ["python", "main.py"]
