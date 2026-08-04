@@ -332,11 +332,26 @@ def run_pipeline(source_text: str, config: Dict) -> Tuple[Optional[Dict], List[D
     passed, score, issues = audit_lesson(data, source_text)
     print(f"[pipeline] Audit score: {score}/100, pass={passed}, issues={len(issues)}")
 
+    # Attach audit metadata directly to data for storage
+    data["_audit"] = {
+        "score": score,
+        "passed": passed,
+        "issue_count": len(issues),
+        "issues": issues,
+    }
+
     if not passed and issues:
         print(f"[pipeline] Fixing {len([i for i in issues if i.get('severity') in ('critical', 'high')])} critical/high issues with Kimi...")
         data = fix_lesson(data, issues, source_text)
         # Re-audit after fix
         passed, score, issues = audit_lesson(data, source_text)
         print(f"[pipeline] Re-audit score: {score}/100, pass={passed}, issues={len(issues)}")
+        # Update audit metadata after fix
+        data["_audit"] = {
+            "score": score,
+            "passed": passed,
+            "issue_count": len(issues),
+            "issues": issues,
+        }
 
     return data, issues
