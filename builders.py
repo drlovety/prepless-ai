@@ -307,33 +307,45 @@ def build_docx(data: Dict, output_path: Path, doc_type: str = "lesson"):
         teacher_notes = plan.get("teacher_notes", {})
         if teacher_notes:
             doc.add_heading("Teacher Notes", level=2)
-            for key, val in teacher_notes.items():
-                if val:
-                    p = doc.add_paragraph()
-                    p.add_run(f"{key.replace('_', ' ').title()}: ").bold = True
-                    p.add_run(str(val))
+            if isinstance(teacher_notes, str):
+                p = doc.add_paragraph()
+                p.add_run(teacher_notes)
+            else:
+                for key, val in teacher_notes.items():
+                    if val:
+                        p = doc.add_paragraph()
+                        p.add_run(f"{key.replace('_', ' ').title()}: ").bold = True
+                        p.add_run(str(val))
             doc.add_paragraph()
 
         # Answer Keys
         answer_keys = plan.get("answer_keys", {})
         if answer_keys:
             doc.add_heading("Answer Keys", level=2)
-            for key, val in answer_keys.items():
-                if val:
-                    p = doc.add_paragraph()
-                    p.add_run(f"{key.replace('_', ' ').title()}: ").bold = True
-                    p.add_run(str(val))
+            if isinstance(answer_keys, str):
+                p = doc.add_paragraph()
+                p.add_run(answer_keys)
+            else:
+                for key, val in answer_keys.items():
+                    if val:
+                        p = doc.add_paragraph()
+                        p.add_run(f"{key.replace('_', ' ').title()}: ").bold = True
+                        p.add_run(str(val))
             doc.add_paragraph()
 
         # Differentiation
         diff = plan.get("differentiation", {})
         if diff:
             doc.add_heading("Differentiation", level=2)
-            for key, val in diff.items():
-                if val:
-                    p = doc.add_paragraph()
-                    p.add_run(f"{key.replace('_', ' ').title()}: ").bold = True
-                    p.add_run(str(val))
+            if isinstance(diff, str):
+                p = doc.add_paragraph()
+                p.add_run(diff)
+            else:
+                for key, val in diff.items():
+                    if val:
+                        p = doc.add_paragraph()
+                        p.add_run(f"{key.replace('_', ' ').title()}: ").bold = True
+                        p.add_run(str(val))
             doc.add_paragraph()
 
     elif doc_type == "activity":
