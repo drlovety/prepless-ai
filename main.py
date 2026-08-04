@@ -92,14 +92,28 @@ def process_lesson(supabase: Client, lesson: Dict):
     except Exception as e:
         print(f"[process] Failed to mark generating: {e}")
 
-    # Run pipeline
-    data, issues = run_pipeline(source_text, config)
-    if not data:
-        print(f"[process] Pipeline failed for lesson {lesson_id}")
+    # Run pipeline with diagnostic capture
+    try:
+        data, issues = run_pipeline(source_text, config)
+    except Exception as pipeline_exc:
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[process] Pipeline EXCEPTION for lesson {lesson_id}: {pipeline_exc}")
         try:
             supabase.table("lessons").update({
                 "status": "failed",
-                "generated_json": {"error": "Pipeline failed", "audit_issues": issues}
+                "generated_json": {"error": str(pipeline_exc), "traceback": tb}
+            }).eq("id", lesson_id).execute()
+        except Exception as e:
+            print(f"[process] Failed to write diagnostic: {e}")
+        return
+
+    if not data:
+        print(f"[process] Pipeline returned no data for lesson {lesson_id}")
+        try:
+            supabase.table("lessons").update({
+                "status": "failed",
+                "generated_json": {"error": "Pipeline returned no data", "audit_issues": issues}
             }).eq("id", lesson_id).execute()
         except Exception as e:
             print(f"[process] Failed to mark failed: {e}")
